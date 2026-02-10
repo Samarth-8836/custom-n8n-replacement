@@ -255,6 +255,7 @@ export const api = {
     artifacts_created: Array<{ artifact_id: string; artifact_name: string; file_path: string; format: string }>;
     run_status?: string;
     next_checkpoint_id?: string;
+    form_data?: Record<string, unknown>;
     message: string;
   }> {
     const response = await fetch(`${API_BASE_URL}/executions/${executionId}/submit`, {
@@ -268,6 +269,7 @@ export const api = {
       artifacts_created: Array<{ artifact_id: string; artifact_name: string; file_path: string; format: string }>;
       run_status?: string;
       next_checkpoint_id?: string;
+      form_data?: Record<string, unknown>;
       message: string;
     }>(response);
   },

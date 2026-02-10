@@ -139,6 +139,7 @@ def submit_form_data(
             "status": execution.status,
             "artifacts_created": artifacts,
             "run_status": run.status if run else None,
+            "form_data": request.form_data,  # Include submitted form data in response
             "message": (
                 "Form data submitted successfully. "
                 f"Status is now '{execution.status}'."

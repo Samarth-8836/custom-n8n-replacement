@@ -23,6 +23,7 @@ from src.db.models import (
     Pipeline,
     PipelineRun,
 )
+from src.utils.logger import get_logger
 
 
 class ExecutionService:
@@ -245,7 +246,15 @@ class ExecutionService:
         if human_only_config.get("save_as_artifact", False):
             artifact_name = human_only_config.get("artifact_name", "form_data")
             artifact_format = human_only_config.get("artifact_format", "json")
-            artifact_id = str(uuid4())
+
+            # During revisions, overwrite the existing artifact instead of creating new ones
+            # Find existing artifact with same name for this execution
+            existing_artifact = session.execute(
+                select(Artifact).where(
+                    Artifact.execution_id == execution_id,
+                    Artifact.artifact_name == artifact_name
+                )
+            ).scalar_one_or_none()
 
             # Create artifact file
             if artifact_format == "json":
@@ -255,20 +264,31 @@ class ExecutionService:
                 for key, value in form_data.items():
                     content += f"**{key}**: {value}\n\n"
 
+            # Use existing artifact_id if revising, otherwise create new one
+            if existing_artifact:
+                artifact_id = existing_artifact.artifact_id
+            else:
+                artifact_id = str(uuid4())
+
             artifact_file = staging_dir / f"{artifact_name}_{artifact_id}.{artifact_format}"
             with open(artifact_file, 'w') as f:
                 f.write(content)
 
-            # Create artifact record
-            artifact = Artifact(
-                execution_id=execution_id,
-                artifact_id=artifact_id,
-                artifact_name=artifact_name,
-                file_path=str(artifact_file),
-                format=artifact_format,
-                size_bytes=len(content.encode()),
-            )
-            session.add(artifact)
+            # Update existing artifact or create new one
+            if existing_artifact:
+                existing_artifact.file_path = str(artifact_file)
+                existing_artifact.size_bytes = len(content.encode())
+                existing_artifact.format = artifact_format
+            else:
+                artifact = Artifact(
+                    execution_id=execution_id,
+                    artifact_id=artifact_id,
+                    artifact_name=artifact_name,
+                    file_path=str(artifact_file),
+                    format=artifact_format,
+                    size_bytes=len(content.encode()),
+                )
+                session.add(artifact)
             session.flush()
 
             artifacts_created.append({
@@ -276,6 +296,7 @@ class ExecutionService:
                 "artifact_name": artifact_name,
                 "file_path": str(artifact_file),
                 "format": artifact_format,
+                "is_revision": bool(existing_artifact),
             })
 
         # Check if approval is required to complete
@@ -403,6 +424,11 @@ class ExecutionService:
             ).scalar_one_or_none()
 
             if next_checkpoint_def:
+                # Clean up the PREVIOUS checkpoint's temp workspace before starting next
+                # This is critical: temp should be deleted after next checkpoint starts
+                fm = FileManager(run.pipeline_id)
+                fm.delete_temp_execution_directory(execution.execution_id)
+
                 # Create next checkpoint execution
                 from src.services.run_service import RunService
                 next_execution = RunService.create_checkpoint_execution(
@@ -410,7 +436,7 @@ class ExecutionService:
                     run=run,
                     checkpoint_def=next_checkpoint_def,
                     position=current_position + 1,
-                    file_manager=FileManager(run.pipeline_id),
+                    file_manager=fm,
                 )
 
                 # Update run's current checkpoint
@@ -440,7 +466,45 @@ class ExecutionService:
             fm = FileManager(run.pipeline_id)
             fm.delete_temp_execution_directory(execution.execution_id)
 
+            # Update run_info.json with final status
+            fm.save_run_info(run.run_version, {
+                "run_id": run.run_id,
+                "pipeline_id": run.pipeline_id,
+                "run_version": run.run_version,
+                "status": run.status,
+                "created_at": run.created_at.isoformat(),
+                "started_at": run.started_at.isoformat() if run.started_at else None,
+                "completed_at": run.completed_at.isoformat() if run.completed_at else None,
+                "previous_run_id": run.previous_run_id,
+                "extends_from_run_version": run.extends_from_run_version,
+            })
+
         session.flush()
+
+        # Log checkpoint completion
+        logger = get_logger(run.pipeline_id)
+        logger.log_event(
+            "checkpoint_completed",
+            f"Checkpoint '{checkpoint_def.checkpoint_name}' (position {execution.checkpoint_position}) completed",
+            {
+                "execution_id": execution.execution_id,
+                "checkpoint_position": execution.checkpoint_position,
+                "artifacts_promoted": len(promoted_artifacts),
+                "next_checkpoint_exists": next_checkpoint_id is not None,
+            }
+        )
+
+        # Log pipeline completion if finished
+        if run.status == "completed":
+            logger.log_event(
+                "pipeline_completed",
+                f"Pipeline run v{run.run_version} completed successfully",
+                {
+                    "run_id": run.run_id,
+                    "run_version": run.run_version,
+                    "completed_at": run.completed_at.isoformat() if run.completed_at else None,
+                }
+            )
 
         return {
             "execution": execution,

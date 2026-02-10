@@ -12,8 +12,10 @@ from sqlalchemy.orm import Session
 from sqlalchemy.orm.attributes import flag_modified
 
 from src.core.file_manager import FileManager
+from src.db.database import init_pipeline_db
 from src.db.models import CheckpointDefinition, Event, Pipeline
 from src.models.schemas import PipelineCreate, PipelineDetailResponse, PipelineResponse, PipelineUpdate
+from src.utils.logger import get_logger
 
 
 class PipelineService:
@@ -67,6 +69,9 @@ class PipelineService:
         file_manager = FileManager(pipeline_id)
         file_manager.initialize_pipeline_structure()
 
+        # Initialize pipeline-specific database (per spec: .pipeline_system/db/state.db)
+        init_pipeline_db(pipeline_id)
+
         # Save pipeline definition to file
         file_manager.save_pipeline_definition(pipeline.to_dict())
 
@@ -81,6 +86,14 @@ class PipelineService:
 
         session.commit()
         session.refresh(pipeline)
+
+        # Log to system.log
+        logger = get_logger(pipeline_id)
+        logger.log_event(
+            "pipeline_created",
+            f"Pipeline '{data.pipeline_name}' created successfully",
+            {"pipeline_id": pipeline_id, "auto_advance": data.auto_advance}
+        )
 
         return PipelineResponse(
             pipeline_id=pipeline.pipeline_id,

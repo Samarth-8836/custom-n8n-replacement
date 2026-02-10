@@ -14,7 +14,8 @@
       "Bash(tasklist:*)",
       "Bash(cmd.exe:*)",
       "Bash(powershell:*)",
-      "Bash(dir:*)"
+      "Bash(dir:*)",
+      "Bash(sqlite3:*)"
     ]
   }
 }

@@ -24,6 +24,7 @@ from src.models.schemas import (
     InputFieldResponse,
     OutputArtifactResponse,
 )
+from src.utils.logger import get_logger
 
 
 class CheckpointService:
@@ -172,6 +173,18 @@ class CheckpointService:
 
         session.commit()
         session.refresh(checkpoint)
+
+        # Log to system.log
+        logger = get_logger(pipeline_id)
+        logger.log_event(
+            "checkpoint_created",
+            f"Checkpoint '{data.checkpoint_name}' created",
+            {
+                "checkpoint_id": checkpoint_id,
+                "checkpoint_name": data.checkpoint_name,
+                "execution_mode": data.execution_mode,
+            }
+        )
 
         # Build response
         return CheckpointService._build_checkpoint_response(checkpoint)

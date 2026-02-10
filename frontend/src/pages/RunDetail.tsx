@@ -522,6 +522,14 @@ export function RunDetail({ runId }: RunDetailProps) {
           break;
         case 'submit':
           result = await api.submitFormData(currentExecution.execution_id, data as Record<string, unknown>);
+          // Update execution state with returned form data immediately
+          if (result.form_data && currentExecution) {
+            setCurrentExecution({
+              ...currentExecution,
+              form_data: result.form_data,
+              status: result.status || currentExecution.status
+            });
+          }
           // Check if pipeline was completed (auto-complete without approval)
           if (result.run_status === 'completed') {
             setActionMessage('Pipeline completed successfully! 🎉');

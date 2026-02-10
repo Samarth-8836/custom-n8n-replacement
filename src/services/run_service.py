@@ -20,6 +20,7 @@ from src.db.models import (
     Pipeline,
     PipelineRun,
 )
+from src.utils.logger import get_logger
 
 
 class RunService:
@@ -151,6 +152,18 @@ class RunService:
             "extends_from_run_version": run.extends_from_run_version,
         })
 
+        # Log to system.log
+        logger = get_logger(pipeline_id)
+        logger.log_event(
+            "run_created",
+            f"Run v{run_version} created",
+            {
+                "run_id": run.run_id,
+                "run_version": run_version,
+                "extends_from": run.extends_from_run_version
+            }
+        )
+
         return run
 
     @staticmethod
@@ -220,8 +233,33 @@ class RunService:
 
         session.flush()
 
+        # Update run_info.json with new status
+        fm.save_run_info(run.run_version, {
+            "run_id": run.run_id,
+            "pipeline_id": run.pipeline_id,
+            "run_version": run.run_version,
+            "status": run.status,
+            "created_at": run.created_at.isoformat(),
+            "started_at": run.started_at.isoformat() if run.started_at else None,
+            "previous_run_id": run.previous_run_id,
+            "extends_from_run_version": run.extends_from_run_version,
+            "current_checkpoint_id": run.current_checkpoint_id,
+            "current_checkpoint_position": run.current_checkpoint_position,
+        })
+
         # Update latest symlink
         fm.update_latest_symlink(run.run_version)
+
+        # Log to system.log
+        logger = get_logger(run.pipeline_id)
+        logger.log_event(
+            "run_started",
+            f"Run v{run.run_version} started",
+            {
+                "run_id": run.run_id,
+                "first_checkpoint": execution.checkpoint_id,
+            }
+        )
 
         return run
 
