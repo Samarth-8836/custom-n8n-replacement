@@ -1,0 +1,20 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(python:*)",
+      "Bash(taskkill:*)",
+      "Bash(npm create:*)",
+      "Bash(npm install:*)",
+      "Bash(npm --version:*)",
+      "Bash(node:*)",
+      "Bash(where npm)",
+      "Bash(D:/Node/npm.cmd install)",
+      "Bash(curl:*)",
+      "Bash(npm run build:*)",
+      "Bash(tasklist:*)",
+      "Bash(cmd.exe:*)",
+      "Bash(powershell:*)",
+      "Bash(dir:*)"
+    ]
+  }
+}
