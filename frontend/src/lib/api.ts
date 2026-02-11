@@ -20,6 +20,9 @@ import type {
   PipelineRunCreate,
   CheckpointExecutionDetail,
   FormField,
+  ArtifactMetadata,
+  ArtifactContent,
+  ArtifactListResponse,
 } from '../types/pipeline';
 
 const API_BASE_URL = import.meta.env.VITE_API_URL || '/api';
@@ -348,5 +351,65 @@ export const api = {
       max_revision_iterations: number;
       message: string;
     }>(response);
+  },
+
+  // =============================================================================
+  // Artifact APIs (Slice 9)
+  // =============================================================================
+
+  /**
+   * Get artifact metadata
+   */
+  async getArtifact(artifactId: string): Promise<ArtifactMetadata> {
+    const response = await fetch(`${API_BASE_URL}/artifacts/${artifactId}`);
+    return handleResponse<ArtifactMetadata>(response);
+  },
+
+  /**
+   * Get artifact content for preview
+   */
+  async getArtifactContent(artifactId: string): Promise<ArtifactContent> {
+    const response = await fetch(`${API_BASE_URL}/artifacts/${artifactId}/content`);
+    return handleResponse<ArtifactContent>(response);
+  },
+
+  /**
+   * Get download URL for an artifact
+   * Returns the API endpoint URL for downloading the artifact
+   */
+  getArtifactDownloadUrl(artifactId: string): string {
+    return `${API_BASE_URL}/artifacts/${artifactId}/download`;
+  },
+
+  /**
+   * List artifacts for a checkpoint execution
+   */
+  async listExecutionArtifacts(executionId: string): Promise<ArtifactListResponse> {
+    const response = await fetch(`${API_BASE_URL}/artifacts/execution/${executionId}`);
+    return handleResponse<ArtifactListResponse>(response);
+  },
+
+  /**
+   * Download an artifact file
+   * Creates a download link and triggers the download
+   */
+  async downloadArtifact(artifactId: string, filename?: string): Promise<void> {
+    const url = this.getArtifactDownloadUrl(artifactId);
+    const response = await fetch(url);
+
+    if (!response.ok) {
+      const error = await response.json().catch(() => ({ message: 'Download failed' }));
+      throw new Error(error.message || `HTTP ${response.status}`);
+    }
+
+    const blob = await response.blob();
+    const downloadUrl = window.URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = downloadUrl;
+    link.download = filename || `artifact_${artifactId}`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    window.URL.revokeObjectURL(downloadUrl);
   },
 };

@@ -228,3 +228,49 @@ export interface CheckpointExecutionDetail extends CheckpointExecutionSummary {
 
 // Re-export InputField as FormField for use in execution context
 export type FormField = InputField;
+
+// =============================================================================
+// Artifact Types (Slice 9)
+// =============================================================================
+
+export interface ArtifactSummary {
+  artifact_id: string;
+  artifact_name: string;
+  format: string;
+  size_bytes: number | null;
+  created_at: string | null;
+  promoted_to_permanent_at: string | null;
+  is_promoted: boolean;
+}
+
+export interface ArtifactMetadata {
+  artifact_id: string;
+  artifact_record_id: string;
+  artifact_name: string;
+  format: string;
+  file_path: string;
+  size_bytes: number | null;
+  checksum: string | null;
+  created_at: string | null;
+  promoted_to_permanent_at: string | null;
+  execution_id: string;
+  file_exists: boolean;
+  checkpoint_position: number | null;
+  is_promoted: boolean;
+}
+
+export interface ArtifactContent {
+  artifact_id: string;
+  artifact_name: string;
+  format: string;
+  size_bytes: number | null;
+  content: string | null;
+  file_path: string | null;
+  created_at: string | null;
+  error: string | null;
+}
+
+export interface ArtifactListResponse {
+  execution_id: string;
+  artifacts: ArtifactSummary[];
+}

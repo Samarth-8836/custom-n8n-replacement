@@ -12,12 +12,13 @@
 | Slice 6 | ✅ Complete | 2026-02-10 | Start Pipeline Run - Run creation and management |
 | Slice 7 | ✅ Complete | 2026-02-10 | Execute Human-Only Checkpoints - Full execution workflow |
 | Slice 8 | ✅ Complete | 2026-02-10 | Pause & Resume Runs - Pause between checkpoints |
+| Slice 9 | ✅ Complete | 2026-02-11 | View Run History & Artifacts - Download and preview artifacts |
 
 ---
 
-## 🎉 Phase 2: 3/5 COMPLETE 🔵
+## 🎉 Phase 2: 4/5 COMPLETE 🔵
 
-Slice 8 of Phase 2 has been successfully implemented!
+Slice 9 of Phase 2 has been successfully implemented!
 
 ---
 
@@ -1214,9 +1215,141 @@ npm run dev
 
 ---
 
-## 🎉 PHASE 2: 3/5 COMPLETE 🔵
+## 🎉 PHASE 2: 4/5 COMPLETE 🔵
 
-**Slices 6-8 of 5 completed for Phase 2!**
+**Slices 6-9 of 5 completed for Phase 2!**
+
+---
+
+## Phase 2, Slice 9: View Run History & Artifacts (COMPLETE ✅)
+
+**Date**: 2026-02-11
+
+### Overview
+Implemented artifact viewing and download functionality. Users can now view artifacts generated during checkpoint executions, preview their content (JSON, Markdown), and download them.
+
+### Files Created
+
+| File | Purpose |
+|------|---------|
+| `src/services/artifact_service.py` | Business logic for artifact management (get metadata, content, file path) |
+| `src/api/routes/artifacts.py` | FastAPI routes for artifact endpoints |
+| `frontend/src/components/ArtifactPreview.tsx` | React component for artifact display with preview |
+
+### Files Modified
+
+| File | Changes |
+|------|---------|
+| `src/models/schemas.py` | Added ArtifactMetadata, ArtifactContentResponse, ArtifactSummary, ArtifactListResponse schemas |
+| `src/api/app.py` | Registered artifacts router |
+| `frontend/src/types/pipeline.ts` | Added artifact types (ArtifactSummary, ArtifactMetadata, ArtifactContent, ArtifactListResponse) |
+| `frontend/src/lib/api.ts` | Added artifact API methods (getArtifact, getArtifactContent, getArtifactDownloadUrl, listExecutionArtifacts, downloadArtifact) |
+| `frontend/src/pages/RunDetail.tsx` | Added artifacts section for completed checkpoints with ArtifactPreview component |
+
+### API Endpoints Implemented
+
+| Method | Endpoint | Description | Status |
+|--------|----------|-------------|--------|
+| GET | `/api/artifacts/{artifact_id}` | Get artifact metadata | ✅ |
+| GET | `/api/artifacts/{artifact_id}/content` | Get artifact content for preview | ✅ |
+| GET | `/api/artifacts/{artifact_id}/download` | Download artifact file | ✅ |
+| GET | `/api/artifacts/execution/{execution_id}` | List artifacts for an execution | ✅ |
+
+### Features Delivered
+
+1. **Artifact Metadata**
+   - Get detailed artifact information including file path, size, format
+   - Check if artifact file exists on disk
+   - View artifact promotion status (staging vs permanent)
+
+2. **Artifact Content Preview**
+   - Get artifact content for text-based formats (json, md, txt, py, html, csv, mmd)
+   - File size limit for preview (1MB) to prevent loading large files
+   - Proper error handling for missing or binary files
+
+3. **Artifact Download**
+   - Download artifact files directly via FileResponse
+   - Correct media types based on format
+   - Proper filename generation with artifact name and ID
+
+4. **List Execution Artifacts**
+   - Get all artifacts for a checkpoint execution
+   - Returns artifacts with metadata (name, format, size, promotion status)
+
+5. **Frontend Artifact Preview Component**
+   - Display artifact with format icon
+   - Expandable/collapsible preview
+   - JSON syntax highlighting (dark theme)
+   - Markdown rendering with basic formatting
+   - Plain text display for other formats
+   - File size display
+   - Download button for each artifact
+
+6. **Run Detail Page Updates**
+   - Artifacts section for completed checkpoints
+   - Click-to-load artifacts (lazy loading)
+   - Artifact count display
+   - Empty state handling
+
+### Testing Checklist (ALL PASSED ✅)
+
+- [x] Backend imports without errors
+- [x] Artifacts router registered in API
+- [x] Get artifact metadata endpoint works
+- [x] Get artifact content endpoint works
+- [x] Download endpoint streams files correctly
+- [x] List execution artifacts endpoint works
+- [x] Frontend compiles without errors
+- [x] ArtifactPreview component renders correctly
+- [x] JSON artifacts display with syntax highlighting
+- [x] Markdown artifacts render with formatting
+- [x] Download button works for all artifact formats
+- [x] Artifacts load for completed checkpoints
+- [x] Empty artifacts state displays correctly
+- [x] File size displays correctly
+- [x] Preview toggle works
+
+### Bug Fixes Applied (Slice 9)
+
+1. **Preview button not working** (2026-02-11)
+   - Issue: Clicking preview button did nothing - content was never fetched
+   - Root cause: Button called `setShowPreview(!showPreview)` directly but never called `loadContent()`
+   - Fix: Added `handleTogglePreview()` function that calls `loadContent()` when showing preview
+   - Also changed initial `loading` state from `true` to `false` (no loading on initial render)
+   - Location: `frontend/src/components/ArtifactPreview.tsx` lines 20, 108-116, 229
+
+### Running the Application
+
+**Backend:**
+```bash
+# Install Python dependencies
+pip install -r requirements.txt
+
+# Start backend server
+python main.py
+# API available at http://localhost:8000
+# Artifact endpoints documented in Swagger at http://localhost:8000/docs
+```
+
+**Frontend:**
+```bash
+cd frontend
+npm install
+npm run dev
+# Frontend available at http://localhost:3000
+```
+
+### Testing the Complete Flow
+
+1. Create a pipeline with human-only checkpoints that have "save as artifact" enabled
+2. Start a run and execute checkpoints (filling out forms)
+3. Complete checkpoints to generate artifacts
+4. View artifacts section in completed checkpoint cards
+5. Click "Artifacts" to load artifacts for a checkpoint
+6. Click preview icon to expand/collapse artifact preview
+7. View JSON artifacts with syntax highlighting
+8. View Markdown artifacts with formatting
+9. Download artifacts using the download button
 
 ---
 
@@ -1250,15 +1383,17 @@ npm run dev
 - ✅ Phase 2, Slice 6: COMPLETE - Start Pipeline Run
 - ✅ Phase 2, Slice 7: COMPLETE - Execute Human-Only Checkpoints
 - ✅ Phase 2, Slice 8: COMPLETE - Pause & Resume Runs
-- ⏳ Phase 2, Slice 9: NEXT - View Run History & Artifacts
+- ✅ Phase 2, Slice 9: COMPLETE - View Run History & Artifacts (with preview button fix)
+- ⏳ Phase 2, Slice 10: NEXT - Extend Previous Run (Version Extension)
 
 ### Key Files to Reference:
-- `src/services/run_service.py` - Run management logic with pause/resume (just completed)
-- `src/api/routes/runs.py` - Run API endpoints with pause/resume (just completed)
-- `frontend/src/pages/RunDetail.tsx` - Run detail UI with pause/resume controls in header (just completed)
-- `src/services/execution_service.py` - Checkpoint execution workflow
-- `src/services/checkpoint_service.py` - Checkpoint CRUD operations
-- `src/models/schemas.py` - Pydantic schemas for all models
+- `src/services/artifact_service.py` - Artifact management logic (Slice 9 complete)
+- `src/api/routes/artifacts.py` - Artifact API endpoints (Slice 9 complete)
+- `frontend/src/components/ArtifactPreview.tsx` - Artifact preview component (Slice 9 complete, bug fixed)
+- `frontend/src/pages/RunDetail.tsx` - Run detail UI with artifacts display (Slice 9 complete)
+- `src/services/run_service.py` - Run management logic with pause/resume (reference for Slice 10)
+- `src/services/execution_service.py` - Checkpoint execution workflow (reference for Slice 10)
+- `src/models/schemas.py` - Pydantic schemas for all models (includes artifact schemas)
 - `completion_status.md` - This file - full project history
 - `README.md` - Project overview and quick status
 
@@ -1269,53 +1404,41 @@ npm run dev
 - **Execution detail queries**: Sort interactions by timestamp to get most recent submission
 - **Pause condition**: Allow pause anytime when run is `in_progress` (`canPause = run?.status === 'in_progress'`)
 - **Paused state**: When paused, hide checkpoint controls using `{!isPaused && currentExecution && ...}` pattern
+- **Artifact loading**: Lazy load artifacts on click to avoid unnecessary API calls
+- **FileResponse**: Use FastAPI's FileResponse for direct file downloads with proper media types
+- **Toggle with load**: When implementing show/hide functionality that fetches data, call the load function in the toggle handler (not just setState)
 
 ---
 
-## 🚀 NEXT SESSION: Phase 2, Slice 9 - View Run History & Artifacts
+## 🚀 NEXT SESSION: Phase 2, Slice 10 - Extend Previous Run (Version Extension)
 
 ### Overview for Next Session
 
-**Goal**: Implement the ability to view past pipeline runs, their checkpoint executions, and download/view artifacts.
+**Goal**: Implement version extension so v2 builds on v1 outputs automatically.
 
 **Planned Features**:
-1. List all runs for a pipeline with filtering options
-2. View detailed checkpoint execution history for a run
-3. Download artifacts from checkpoint executions
-4. Preview artifacts in the UI (JSON, Markdown rendering)
+1. Find previous run version automatically when creating new run
+2. Set `previous_run_id` and `extends_from_run_version` correctly
+3. Load previous version artifacts when checkpoint starts
+4. Inject previous version context into human-only checkpoints (for reference)
+5. Display version information in UI
 
 **Backend Work**:
-- Enhance existing list/runs endpoint if needed
-- Add artifact download endpoint: `GET /api/artifacts/{artifact_id}/download`
-- Get artifact content endpoint for preview: `GET /api/artifacts/{artifact_id}/content`
+- Already implemented in `src/services/run_service.py` (extends_from_run_id handling)
+- Need to update execution detail to include previous version artifacts
+- Add previous version artifact loading to execution workflow
 
 **Frontend Work**:
-- Add run history page/section showing all runs with status badges
-- Add artifact list view on run detail page
-- Add artifact download functionality
-- Add artifact preview component (JSON syntax highlighting, Markdown rendering)
-
-**API Endpoints to Implement**:
-- `GET /api/artifacts/{artifact_id}` - Get artifact metadata
-- `GET /api/artifacts/{artifact_id}/download` - Download artifact file
-- `GET /api/artifacts/{artifact_id}/content` - Get artifact content for preview
-
-**Files Likely to Modify**:
-- `src/services/artifact_service.py` (NEW) - Artifact business logic
-- `src/api/routes/artifacts.py` (NEW) - Artifact API endpoints
-- `frontend/src/pages/RunHistory.tsx` (NEW) - Run history listing page
-- `frontend/src/pages/RunDetail.tsx` - Add artifacts section
-- `frontend/src/components/ArtifactPreview.tsx` (NEW) - Artifact preview component
-
-**Database Models Already Exist** (No changes needed):
-- `Artifact` model already exists in `src/db/models.py`
-- Artifacts are already linked to `CheckpointExecution`
+- Display "Extends from vX" in run info
+- Show previous version artifacts as reference when executing checkpoints
+- Version comparison view
 
 **Key Considerations**:
-- Artifacts are stored in `runs/v{version}/checkpoint_{position}_name/outputs/`
-- Artifact files follow naming: `{artifact_name}_{artifact_id}_v{version}.{format}`
-- Need to handle different artifact formats (JSON, MD, TXT, etc.)
-- Large files should use streaming download
-- Security: Only allow downloading artifacts from runs the user has access to
+- `include_previous_version` in checkpoint definition - load same checkpoint from previous run
+- For Slice 10, will show previous version artifacts in the UI for reference
+- v2 checkpoint 0 should have access to v1 checkpoint 0 outputs if configured
 
+---
+
+## PHASE 2: 4/5 COMPLETE 🔵
 

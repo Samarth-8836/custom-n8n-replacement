@@ -430,6 +430,63 @@ class HealthResponse(BaseModel):
 
 
 # =============================================================================
+# Artifact Schemas (Slice 9)
+# =============================================================================
+
+
+class ArtifactMetadata(BaseModel):
+    """Schema for artifact metadata."""
+    artifact_id: str = Field(..., description="Unique artifact identifier")
+    artifact_record_id: str = Field(..., description="Database record ID")
+    artifact_name: str = Field(..., description="Artifact name")
+    format: str = Field(..., description="Artifact format (json, md, etc.)")
+    file_path: str = Field(..., description="Full file path")
+    size_bytes: Optional[int] = Field(None, description="File size in bytes")
+    checksum: Optional[str] = Field(None, description="File checksum")
+    created_at: Optional[datetime] = Field(None, description="Creation timestamp")
+    promoted_to_permanent_at: Optional[datetime] = Field(None, description="Promotion timestamp")
+    execution_id: str = Field(..., description="Execution ID that created this artifact")
+    file_exists: bool = Field(..., description="Whether file still exists on disk")
+    checkpoint_position: Optional[int] = Field(None, description="Checkpoint position")
+    is_promoted: bool = Field(..., description="Whether artifact has been promoted to permanent storage")
+
+    model_config = {"from_attributes": True}
+
+
+class ArtifactContentResponse(BaseModel):
+    """Schema for artifact content response (for preview)."""
+    artifact_id: str = Field(..., description="Unique artifact identifier")
+    artifact_name: str = Field(..., description="Artifact name")
+    format: str = Field(..., description="Artifact format")
+    size_bytes: Optional[int] = Field(None, description="File size in bytes")
+    content: Optional[str] = Field(None, description="File content for text-based formats")
+    file_path: Optional[str] = Field(None, description="Full file path")
+    created_at: Optional[datetime] = Field(None, description="Creation timestamp")
+    error: Optional[str] = Field(None, description="Error message if content cannot be retrieved")
+
+    model_config = {"from_attributes": True}
+
+
+class ArtifactSummary(BaseModel):
+    """Summary schema for artifact in lists."""
+    artifact_id: str
+    artifact_name: str
+    format: str
+    size_bytes: Optional[int] = None
+    created_at: Optional[datetime] = None
+    promoted_to_permanent_at: Optional[datetime] = None
+    is_promoted: bool = False
+
+    model_config = {"from_attributes": True}
+
+
+class ArtifactListResponse(BaseModel):
+    """Schema for artifact list response."""
+    execution_id: str
+    artifacts: list[ArtifactSummary]
+
+
+# =============================================================================
 # Re-export forward references
 # =============================================================================
 

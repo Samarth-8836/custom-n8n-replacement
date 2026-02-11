@@ -11,12 +11,12 @@ A pipeline automation tool with agentic AI capabilities. This system allows you 
 - Slice 4: Create Checkpoint Definitions - Human-only mode
 - Slice 5: Update & Delete Checkpoints + Reorder
 
-**Phase 2 (Pipeline Execution Engine)** - 🔄 IN PROGRESS (3/5 slices)
+**Phase 2 (Pipeline Execution Engine)** - 🔄 IN PROGRESS (4/5 slices) - Slice 9 ✅ COMPLETE
 - Slice 6: Start Pipeline Run - ✅ **COMPLETE**
 - Slice 7: Execute Human-Only Checkpoints - ✅ **COMPLETE**
 - Slice 8: Pause & Resume Runs - ✅ **COMPLETE**
-- Slice 9: View Run History & Artifacts - ⏳ **NEXT**
-- Slice 10: Extend Previous Run (Version Extension)
+- Slice 9: View Run History & Artifacts - ✅ **COMPLETE** (with preview button fix)
+- Slice 10: Extend Previous Run (Version Extension) - ⏳ **NEXT**
 
 **Phase 3: Rollback System** - ⏳ PENDING
 **Phase 4: Agent Execution** - ⏳ PENDING
@@ -123,7 +123,8 @@ Once the server is running:
 │   │       ├── pipelines.py      # Pipeline routes
 │   │       ├── runs.py           # Pipeline run routes (Slice 6)
 │   │       ├── checkpoints.py    # Checkpoint routes (Slice 4)
-│   │       └── executions.py     # Execution control routes (Slice 7)
+│   │       ├── executions.py     # Execution control routes (Slice 7)
+│   │       └── artifacts.py     # Artifact routes (Slice 9)
 │   ├── core/
 │   │   └── file_manager.py       # File operations
 │   ├── db/
@@ -131,11 +132,14 @@ Once the server is running:
 │   │   └── models.py             # SQLAlchemy models
 │   ├── models/
 │   │   └── schemas.py            # Pydantic schemas (includes checkpoint & run schemas)
-│   └── services/
-│       ├── pipeline_service.py   # Pipeline business logic
-│       ├── checkpoint_service.py # Checkpoint business logic
-│       ├── run_service.py        # Run business logic (Slice 6)
-│       └── execution_service.py  # Execution workflow logic (Slice 7)
+│   ├── services/
+│   │   ├── pipeline_service.py   # Pipeline business logic
+│   │   ├── checkpoint_service.py # Checkpoint business logic
+│   │   ├── run_service.py        # Run business logic (Slice 6)
+│   │   ├── execution_service.py  # Execution workflow logic (Slice 7)
+│   │   └── artifact_service.py  # Artifact management logic (Slice 9)
+│   └── utils/
+│       └── logger.py            # Pipeline system logger (Slice 7)
 │
 ├── frontend/
 │   ├── package.json              # NPM dependencies
@@ -145,7 +149,8 @@ Once the server is running:
 │   └── src/
 │       ├── components/
 │       │   ├── Header.tsx        # Navigation header
-│       │   └── PipelineCard.tsx  # Pipeline card component
+│       │   ├── PipelineCard.tsx  # Pipeline card component
+│       │   └── ArtifactPreview.tsx # Artifact preview component (Slice 9)
 │       ├── lib/
 │       │   └── api.ts            # API client
 │       ├── pages/
@@ -155,7 +160,7 @@ Once the server is running:
 │       │   ├── PipelineDetail.tsx # Pipeline detail view
 │       │   ├── CreateCheckpoint.tsx # Create checkpoint form
 │       │   ├── EditCheckpoint.tsx   # Edit checkpoint form
-│       │   └── RunDetail.tsx      # Run detail view (Slice 6)
+│       │   └── RunDetail.tsx      # Run detail view (Slice 6-9)
 │       ├── types/
 │       │   └── pipeline.ts       # TypeScript types
 │       ├── App.tsx               # Main app with routing
@@ -474,13 +479,42 @@ None (all modifications to existing files)
 
 ---
 
-### ⏳ Phase 2, Slice 9: View Run History & Artifacts
+### ✅ Phase 2, Slice 9: View Run History & Artifacts (COMPLETE - 2026-02-11)
 
-**Planned:**
-- [ ] List runs for pipeline
-- [ ] View checkpoint executions
-- [ ] Download artifacts
-- [ ] Artifact preview (JSON, Markdown)
+**Implemented:**
+- [x] List runs for pipeline
+- [x] View checkpoint executions
+- [x] Download artifacts
+- [x] Artifact preview (JSON, Markdown)
+
+**Files Created:**
+- `src/services/artifact_service.py` - Business logic for artifact management
+- `src/api/routes/artifacts.py` - FastAPI routes for artifact endpoints
+- `frontend/src/components/ArtifactPreview.tsx` - React component for artifact display with preview
+
+**Files Modified:**
+- `src/models/schemas.py` - Added ArtifactMetadata, ArtifactContentResponse, ArtifactSummary, ArtifactListResponse
+- `src/api/app.py` - Registered artifacts router
+- `frontend/src/types/pipeline.ts` - Added artifact types
+- `frontend/src/lib/api.ts` - Added artifact API methods
+- `frontend/src/pages/RunDetail.tsx` - Added artifacts section for completed checkpoints
+
+**API Endpoints:**
+- `GET /api/artifacts/{artifact_id}` - Get artifact metadata
+- `GET /api/artifacts/{artifact_id}/content` - Get artifact content for preview
+- `GET /api/artifacts/{artifact_id}/download` - Download artifact file
+- `GET /api/artifacts/execution/{execution_id}` - List artifacts for an execution
+
+**Bug Fixes Applied (Slice 9):**
+1. **Preview button not working** - Fixed: Added `handleTogglePreview()` function that calls `loadContent()` when showing preview; changed initial `loading` state from `true` to `false`
+
+**Features Delivered:**
+- Artifact metadata with file path, size, format, promotion status
+- Artifact content preview for text-based formats (json, md, txt, py, html, csv, mmd)
+- File size limit for preview (1MB)
+- Artifact download via FileResponse with proper media types
+- List execution artifacts
+- Frontend ArtifactPreview component with format icons, expandable preview, JSON syntax highlighting, Markdown rendering
 
 ---
 
@@ -581,12 +615,12 @@ When continuing work in a new session, follow these steps:
    - **Phase 5 (Script Execution & Polish)**: ⏳ PENDING
 
 3. **Next Slice to Implement:**
-   - **Slice 8: Pause & Resume Runs** - See `project_information.md` for detailed requirements
+   - **Slice 10: Extend Previous Run (Version Extension)** - See `project_information.md` for detailed requirements
 
 4. **Important Context:**
-   - Slice 7 included extensive bug fixes (12 total) documented in `completion_status.md`
+   - Slice 9 (View Run History & Artifacts) is complete with 1 bug fix (preview button)
    - All file system issues have been resolved (temp cleanup, state.db creation, logging)
-   - The codebase is stable and ready for Slice 8 implementation
+   - The codebase is stable and ready for Slice 10 implementation
 
 5. **Key Files to Understand:**
    - `src/services/execution_service.py` - Checkpoint execution workflow

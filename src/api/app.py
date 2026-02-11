@@ -118,11 +118,13 @@ async def root():
 from src.api.routes.pipelines import router as pipelines_router
 from src.api.routes.runs import router as runs_router
 from src.api.routes.executions import router as executions_router
+from src.api.routes.artifacts import router as artifacts_router
 
 # Include route modules
 app.include_router(pipelines_router, prefix="/api/pipelines", tags=["Pipelines"])
 app.include_router(runs_router, prefix="/api/runs", tags=["Pipeline Runs"])
 app.include_router(executions_router, tags=["Checkpoint Executions"])
+app.include_router(artifacts_router, prefix="/api/artifacts", tags=["Artifacts"])
 
 # =============================================================================
 # Checkpoints routes - directly in app.py to avoid import issues
@@ -239,6 +241,6 @@ def delete_checkpoint(
 app.include_router(checkpoints_router, prefix="/api/checkpoints", tags=["Checkpoints"])
 
 # Additional routes (to be implemented in later slices)
-# from src.api.routes import rollback, artifacts
+# from src.api.routes import rollback
 # app.include_router(rollback.router, prefix="/api/rollback", tags=["Rollback"])
-# app.include_router(artifacts.router, prefix="/api/artifacts", tags=["Artifacts"])
+# Artifacts router is now registered above (Slice 9)

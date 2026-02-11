@@ -3,11 +3,13 @@
  *
  * Displays the status and progress of a pipeline run.
  * Shows checkpoint executions and allows interaction for human-only checkpoints.
+ * Shows artifacts for completed checkpoints (Slice 9).
  */
 
 import { useEffect, useState, useCallback } from 'react';
-import type { PipelineRunDetail, CheckpointExecutionDetail, FormField } from '../types/pipeline';
+import type { PipelineRunDetail, CheckpointExecutionDetail, FormField, ArtifactSummary } from '../types/pipeline';
 import { api } from '../lib/api';
+import { ArtifactPreview } from '../components/ArtifactPreview';
 
 interface RunDetailProps {
   runId: string;
@@ -470,6 +472,8 @@ export function RunDetail({ runId }: RunDetailProps) {
   const [actionLoading, setActionLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [actionMessage, setActionMessage] = useState<string | null>(null);
+  // Store artifacts for each execution (Slice 9)
+  const [executionArtifacts, setExecutionArtifacts] = useState<Record<string, ArtifactSummary[]>>({});
 
   const fetchData = useCallback(async () => {
     if (!runId) return;
@@ -503,6 +507,29 @@ export function RunDetail({ runId }: RunDetailProps) {
       setLoading(false);
     }
   }, [runId]);
+
+  // Load artifacts for a specific execution (Slice 9)
+  const loadExecutionArtifacts = useCallback(async (executionId: string) => {
+    // Skip if already loaded
+    if (executionArtifacts[executionId]) {
+      return;
+    }
+
+    try {
+      const data = await api.listExecutionArtifacts(executionId);
+      setExecutionArtifacts((prev) => ({
+        ...prev,
+        [executionId]: data.artifacts,
+      }));
+    } catch (err) {
+      console.error(`Failed to load artifacts for execution ${executionId}:`, err);
+      // Set empty array to prevent retry
+      setExecutionArtifacts((prev) => ({
+        ...prev,
+        [executionId]: [],
+      }));
+    }
+  }, [executionArtifacts]);
 
   useEffect(() => {
     fetchData();
@@ -932,32 +959,75 @@ export function RunDetail({ runId }: RunDetailProps) {
               return (
                 <div
                   key={execution.execution_id}
-                  className={`border rounded-lg p-4 ${statusColor}`}
+                  className={`border rounded-lg ${statusColor}`}
                 >
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-3">
-                      <span className="flex items-center justify-center w-6 h-6 rounded-full bg-white/50 text-sm font-medium">
-                        {execution.checkpoint_position + 1}
-                      </span>
-                      <div>
-                        <h3 className="font-medium">
-                          {execution.checkpoint_name || `Checkpoint ${execution.checkpoint_position + 1}`}
-                        </h3>
-                        <p className="text-sm opacity-75 capitalize">
-                          Status: {execution.status.replace(/_/g, ' ')}
-                        </p>
+                  <div className="p-4">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-3">
+                        <span className="flex items-center justify-center w-6 h-6 rounded-full bg-white/50 text-sm font-medium">
+                          {execution.checkpoint_position + 1}
+                        </span>
+                        <div>
+                          <h3 className="font-medium">
+                            {execution.checkpoint_name || `Checkpoint ${execution.checkpoint_position + 1}`}
+                          </h3>
+                          <p className="text-sm opacity-75 capitalize">
+                            Status: {execution.status.replace(/_/g, ' ')}
+                          </p>
+                        </div>
+                      </div>
+                      <div className="text-right text-sm">
+                        {execution.attempt_number > 1 && (
+                          <p className="opacity-75">Attempt {execution.attempt_number}</p>
+                        )}
+                        {execution.completed_at && (
+                          <p className="opacity-75">
+                            {new Date(execution.completed_at).toLocaleTimeString()}
+                          </p>
+                        )}
                       </div>
                     </div>
-                    <div className="text-right text-sm">
-                      {execution.attempt_number > 1 && (
-                        <p className="opacity-75">Attempt {execution.attempt_number}</p>
-                      )}
-                      {execution.completed_at && (
-                        <p className="opacity-75">
-                          {new Date(execution.completed_at).toLocaleTimeString()}
-                        </p>
-                      )}
-                    </div>
+
+                    {/* Artifacts Section (Slice 9) */}
+                    {execution.status === 'completed' && (
+                      <div className="mt-4 pt-4 border-t border-black/10">
+                        <div className="flex items-center justify-between mb-2">
+                          <button
+                            onClick={() => loadExecutionArtifacts(execution.execution_id)}
+                            className="text-sm font-medium flex items-center gap-1 hover:underline"
+                          >
+                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012 2h6a2 2 0 002-2V5a2 2 0 00-2-2M5 11a2 2 0 012 2m0 0a2 2 0 012 2m0 0v6a2 2 0 002 2v0a2 2 0 002-2v-6a2 2 0 00-2-2" />
+                            </svg>
+                            Artifacts
+                            {executionArtifacts[execution.execution_id] && (
+                              <span className="text-gray-500 font-normal">
+                                ({executionArtifacts[execution.execution_id].length})
+                              </span>
+                            )}
+                          </button>
+                        </div>
+
+                        {executionArtifacts[execution.execution_id] ? (
+                          executionArtifacts[execution.execution_id].length > 0 ? (
+                            <div className="space-y-2">
+                              {executionArtifacts[execution.execution_id].map((artifact) => (
+                                <ArtifactPreview
+                                  key={artifact.artifact_id}
+                                  artifact={artifact}
+                                />
+                              ))}
+                            </div>
+                          ) : (
+                            <p className="text-sm text-gray-500 italic">No artifacts generated</p>
+                          )
+                        ) : (
+                          <p className="text-sm text-gray-500 italic">
+                            Click to load artifacts
+                          </p>
+                        )}
+                      </div>
+                    )}
                   </div>
                 </div>
               );
@@ -966,9 +1036,9 @@ export function RunDetail({ runId }: RunDetailProps) {
         )}
       </div>
 
-      {/* Info Box for Slice 7 */}
+      {/* Info Box for Slice 7-9 */}
       <div className="mt-6 bg-blue-50 border border-blue-200 rounded-lg p-4">
-        <h3 className="font-semibold text-blue-900 mb-2">ℹ️ Slice 7 & 8 Features</h3>
+        <h3 className="font-semibold text-blue-900 mb-2">ℹ️ Features</h3>
         <ul className="text-sm text-blue-800 space-y-1">
           <li>• Approve checkpoint start (for checkpoints requiring approval)</li>
           <li>• Fill out forms for human-only checkpoints</li>
@@ -977,6 +1047,7 @@ export function RunDetail({ runId }: RunDetailProps) {
           <li>• Automatic progression to next checkpoint</li>
           <li>• Pause pipeline between checkpoints (Slice 8)</li>
           <li>• Resume paused pipeline (Slice 8)</li>
+          <li>• View and download checkpoint artifacts (Slice 9)</li>
         </ul>
       </div>
     </div>
