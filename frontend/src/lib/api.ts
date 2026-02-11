@@ -210,6 +210,28 @@ export const api = {
     return handleResponse<PipelineRunListResponse>(response);
   },
 
+  /**
+   * Pause a pipeline run (Slice 8)
+   */
+  async pauseRun(runId: string): Promise<PipelineRunDetail> {
+    const response = await fetch(`${API_BASE_URL}/runs/${runId}/pause`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+    });
+    return handleResponse<PipelineRunDetail>(response);
+  },
+
+  /**
+   * Resume a paused pipeline run (Slice 8)
+   */
+  async resumeRun(runId: string): Promise<PipelineRunDetail> {
+    const response = await fetch(`${API_BASE_URL}/runs/${runId}/resume`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+    });
+    return handleResponse<PipelineRunDetail>(response);
+  },
+
   // =============================================================================
   // Checkpoint Execution APIs (Slice 7)
   // =============================================================================

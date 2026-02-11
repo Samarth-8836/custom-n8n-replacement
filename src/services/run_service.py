@@ -482,3 +482,183 @@ class RunService:
             .where(PipelineRun.pipeline_id == pipeline_id)
         )
         return result.scalar()
+
+    @staticmethod
+    def pause_run(session: Session, run_id: str) -> PipelineRun:
+        """
+        Pause a pipeline run.
+
+        Pause can occur at any time when the run is in_progress.
+        The checkpoint will remain in its current state and can be
+        resumed later to continue execution.
+
+        Args:
+            session: Database session
+            run_id: Run ID to pause
+
+        Returns:
+            Updated PipelineRun
+
+        Raises:
+            ValueError: If run not found or cannot be paused
+        """
+        # Get the run
+        run = session.execute(
+            select(PipelineRun).where(PipelineRun.run_id == run_id)
+        ).scalar_one_or_none()
+
+        if not run:
+            raise ValueError(f"Run with ID '{run_id}' not found")
+
+        # Can only pause runs that are in_progress
+        if run.status != "in_progress":
+            raise ValueError(f"Cannot pause run with status '{run.status}'. Only 'in_progress' runs can be paused.")
+
+        # Update run status to paused
+        run.status = "paused"
+        run.paused_at = datetime.utcnow()
+
+        session.flush()
+
+        # Update run_info.json
+        fm = FileManager(run.pipeline_id)
+        fm.save_run_info(run.run_version, {
+            "run_id": run.run_id,
+            "pipeline_id": run.pipeline_id,
+            "run_version": run.run_version,
+            "status": run.status,
+            "created_at": run.created_at.isoformat(),
+            "started_at": run.started_at.isoformat() if run.started_at else None,
+            "paused_at": run.paused_at.isoformat() if run.paused_at else None,
+            "previous_run_id": run.previous_run_id,
+            "extends_from_run_version": run.extends_from_run_version,
+            "current_checkpoint_id": run.current_checkpoint_id,
+            "current_checkpoint_position": run.current_checkpoint_position,
+        })
+
+        # Log to system.log
+        logger = get_logger(run.pipeline_id)
+        logger.log_event(
+            "run_paused",
+            f"Run v{run.run_version} paused",
+            {
+                "run_id": run.run_id,
+                "paused_at": run.paused_at.isoformat() if run.paused_at else None,
+            }
+        )
+
+        return run
+
+    @staticmethod
+    def resume_run(session: Session, run_id: str) -> PipelineRun:
+        """
+        Resume a paused pipeline run.
+
+        Resuming creates the next checkpoint execution if the current checkpoint
+        is completed, or simply changes status back to in_progress if waiting
+        at a checkpoint.
+
+        Args:
+            session: Database session
+            run_id: Run ID to resume
+
+        Returns:
+            Updated PipelineRun
+
+        Raises:
+            ValueError: If run not found or cannot be resumed
+        """
+        # Get the run
+        run = session.execute(
+            select(PipelineRun).where(PipelineRun.run_id == run_id)
+        ).scalar_one_or_none()
+
+        if not run:
+            raise ValueError(f"Run with ID '{run_id}' not found")
+
+        # Can only resume paused runs
+        if run.status != "paused":
+            raise ValueError(f"Cannot resume run with status '{run.status}'. Only 'paused' runs can be resumed.")
+
+        # Get pipeline to access checkpoint_order
+        pipeline = session.execute(
+            select(Pipeline).where(Pipeline.pipeline_id == run.pipeline_id)
+        ).scalar_one()
+
+        # Update run status back to in_progress
+        run.status = "in_progress"
+        run.last_resumed_at = datetime.utcnow()
+
+        session.flush()
+
+        # Get checkpoint executions to find current state
+        executions = session.execute(
+            select(CheckpointExecution)
+            .where(CheckpointExecution.run_id == run_id)
+            .order_by(CheckpointExecution.checkpoint_position)
+        ).scalars().all()
+
+        # If we have completed checkpoints but no active one, create the next one
+        if executions:
+            latest_execution = executions[-1]
+
+            # If latest is completed and there are more checkpoints, create next execution
+            if latest_execution.status == "completed":
+                next_position = latest_execution.checkpoint_position + 1
+
+                if next_position < len(pipeline.checkpoint_order):
+                    # There's another checkpoint to execute
+                    next_checkpoint_id = pipeline.checkpoint_order[next_position]
+
+                    checkpoint_def = session.execute(
+                        select(CheckpointDefinition).where(
+                            CheckpointDefinition.checkpoint_id == next_checkpoint_id
+                        )
+                    ).scalar_one_or_none()
+
+                    if checkpoint_def:
+                        # Create the next checkpoint execution
+                        fm = FileManager(run.pipeline_id)
+                        execution = RunService.create_checkpoint_execution(
+                            session=session,
+                            run=run,
+                            checkpoint_def=checkpoint_def,
+                            position=next_position,
+                            file_manager=fm,
+                        )
+
+                        # Update run's current checkpoint
+                        run.current_checkpoint_id = execution.checkpoint_id
+                        run.current_checkpoint_position = next_position
+
+                        session.flush()
+
+        # Update run_info.json
+        fm = FileManager(run.pipeline_id)
+        fm.save_run_info(run.run_version, {
+            "run_id": run.run_id,
+            "pipeline_id": run.pipeline_id,
+            "run_version": run.run_version,
+            "status": run.status,
+            "created_at": run.created_at.isoformat(),
+            "started_at": run.started_at.isoformat() if run.started_at else None,
+            "paused_at": run.paused_at.isoformat() if run.paused_at else None,
+            "last_resumed_at": run.last_resumed_at.isoformat() if run.last_resumed_at else None,
+            "previous_run_id": run.previous_run_id,
+            "extends_from_run_version": run.extends_from_run_version,
+            "current_checkpoint_id": run.current_checkpoint_id,
+            "current_checkpoint_position": run.current_checkpoint_position,
+        })
+
+        # Log to system.log
+        logger = get_logger(run.pipeline_id)
+        logger.log_event(
+            "run_resumed",
+            f"Run v{run.run_version} resumed",
+            {
+                "run_id": run.run_id,
+                "resumed_at": run.last_resumed_at.isoformat() if run.last_resumed_at else None,
+            }
+        )
+
+        return run

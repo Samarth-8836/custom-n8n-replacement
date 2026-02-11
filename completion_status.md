@@ -11,12 +11,13 @@
 | Slice 5 | ✅ Complete | 2026-02-10 | Update & Delete Checkpoints + Reorder |
 | Slice 6 | ✅ Complete | 2026-02-10 | Start Pipeline Run - Run creation and management |
 | Slice 7 | ✅ Complete | 2026-02-10 | Execute Human-Only Checkpoints - Full execution workflow |
+| Slice 8 | ✅ Complete | 2026-02-10 | Pause & Resume Runs - Pause between checkpoints |
 
 ---
 
-## 🎉 Phase 2: IN PROGRESS 🔵
+## 🎉 Phase 2: 3/5 COMPLETE 🔵
 
-Slice 7 of Phase 2 has been successfully implemented!
+Slice 8 of Phase 2 has been successfully implemented!
 
 ---
 
@@ -981,6 +982,45 @@ pending → waiting_approval_to_start → in_progress → waiting_approval_to_co
    - Fixed by adding `flag_modified()` calls after modifying `checkpoint_order`
    - Location: `src/services/checkpoint_service.py` lines 151, 459
 
+### Bug Fixes Applied (Slice 7 - Additional Fixes - 2026-02-10)
+
+7. **Temp workspace cleanup not working**
+   - Temp directories were only deleted when pipeline completed, not after each checkpoint
+   - Fixed by adding `fm.delete_temp_execution_directory()` before creating next checkpoint
+   - Location: `src/services/execution_service.py:406-409`
+   - Spec compliance: Temp should be deleted after NEXT checkpoint starts
+
+8. **Per-pipeline state.db not created**
+   - `.pipeline_system/db/state.db` files were not being created for pipelines
+   - Fixed by adding `init_pipeline_db(pipeline_id)` call in pipeline creation
+   - Location: `src/services/pipeline_service.py:71-72`
+   - Note: Per spec, each pipeline should have its own database at this location
+
+9. **Artifacts duplicated during revisions**
+   - Each revision created a new artifact instead of overwriting existing one
+   - Fixed by querying for existing artifact by name and updating it instead of creating new
+   - Location: `src/services/execution_service.py:249-291`
+   - Result: Only ONE artifact file exists per checkpoint, even after multiple revisions
+
+10. **Form data not displaying after submit**
+   - After form submission, the form didn't show the latest data
+   - Fixed by returning `form_data` in submit response and immediately updating frontend state
+   - Location: `src/api/routes/executions.py:142`, `frontend/src/pages/RunDetail.tsx:525-532`
+   - Result: Form immediately shows submitted data after submission
+
+11. **run_info.json never updated**
+   - `run_info.json` was created but never updated with status changes
+   - Fixed by adding `save_run_info()` calls when run starts and completes
+   - Location: `src/services/run_service.py:223-235`, `src/services/execution_service.py:468-479`
+   - Result: run_info.json now shows correct status (in_progress, completed) and timestamps
+
+12. **system.log file not implemented**
+   - `.pipeline_system/logs/system.log` was defined but never created
+   - Fixed by implementing `src/utils/logger.py` with PipelineLogger class
+   - Added logging to all major events: pipeline/checkpoint/run creation, completion
+   - Location: `src/utils/logger.py`, all service files
+   - Result: All pipeline events now logged to pipeline-specific log file
+
 ### Running the Application
 
 **Backend:**
@@ -1015,19 +1055,168 @@ npm run dev
 9. Repeat for all checkpoints
 10. Pipeline completes with v1 artifacts in `runs/v1/`
 
-### Next Session: Phase 2, Slice 8
+### Next Session: Phase 2, Slice 9
 
 **Planned implementation:**
-- Pause & Resume Runs
-- Pause run between checkpoints
-- Resume paused run
-- Store and display pause state
+- View Run History & Artifacts
+- List runs for pipeline
+- View checkpoint executions
+- Download artifacts
+- Artifact preview (JSON, Markdown)
 
 ---
 
-## 🎉 PHASE 2: 2/5 COMPLETE 🔵
+## =============================================================================
 
-**Slices 6-7 of 5 completed for Phase 2!**
+## Phase 2, Slice 8: Pause & Resume Runs (COMPLETE ✅)
+
+**Date**: 2026-02-10
+
+### Overview
+Implemented pause and resume functionality for pipeline runs. Users can now pause a run between checkpoints and resume it later, allowing for flexible execution control.
+
+### Backend Files Modified
+
+| File | Changes |
+|------|---------|
+| `src/services/run_service.py` | Added `pause_run()` and `resume_run()` methods |
+| `src/api/routes/runs.py` | Added pause and resume API endpoints |
+
+### Frontend Files Modified
+
+| File | Changes |
+|------|---------|
+| `frontend/src/lib/api.ts` | Added `pauseRun()` and `resumeRun()` API methods |
+| `frontend/src/pages/RunDetail.tsx` | Added Pause/Resume buttons, handlers, and state handling |
+
+### API Endpoints Implemented
+
+| Method | Endpoint | Description | Status |
+|--------|----------|-------------|--------|
+| POST | `/api/runs/{run_id}/pause` | Pause a pipeline run (only between checkpoints) | ✅ |
+| POST | `/api/runs/{run_id}/resume` | Resume a paused pipeline run | ✅ |
+
+### Features Delivered
+
+1. **Pause Pipeline Run**
+   - Can only pause when status is `in_progress`
+   - Can only pause between checkpoints (latest checkpoint must be `completed` or `failed`)
+   - Sets status to `paused` with timestamp in `paused_at`
+   - Updates `run_info.json` with pause state
+   - Logs pause event to `system.log`
+
+2. **Resume Paused Run**
+   - Can only resume when status is `paused`
+   - Sets status back to `in_progress` with timestamp in `last_resumed_at`
+   - Automatically creates next checkpoint execution if current one is completed
+   - Updates `run_info.json` with resume state
+   - Logs resume event to `system.log`
+
+3. **Run Detail Page Updates**
+   - Pause/Resume buttons moved to **header** (always visible, not in card)
+   - "Pause" button (yellow) - shown in header when `status === 'in_progress'`
+   - "Resume" button (green) - shown in header when `status === 'paused'`
+   - **Checkpoint controls hidden when paused** - user must resume to continue
+   - Yellow "Pipeline is Paused" message shown instead of current execution when paused
+   - Updated info box to mention Slice 8 features
+
+### Pause Logic (Final Implementation)
+
+The `canPause` condition:
+```typescript
+const canPause = run?.status === 'in_progress';
+```
+
+The `isPaused` condition:
+```typescript
+const isPaused = run?.status === 'paused';
+```
+
+This ensures:
+1. Pause button is always visible when run is `in_progress` (regardless of checkpoint state)
+2. Resume button is always visible when run is `paused`
+3. When paused, ALL checkpoint interaction controls are hidden
+
+### Resume Logic
+
+When resuming:
+1. Status changes from `paused` to `in_progress`
+2. Checkpoint controls become visible again
+3. If the latest checkpoint execution is completed, the next checkpoint execution is created automatically
+4. The run continues from where it left off
+
+### Testing Checklist (ALL PASSED ✅)
+
+- [x] Backend imports without errors
+- [x] Pause endpoint registered in API
+- [x] Resume endpoint registered in API
+- [x] Pause button always visible when run is `in_progress`
+- [x] Pause button works at any checkpoint state
+- [x] Resume button shows when run is paused
+- [x] Checkpoint controls are hidden when paused
+- [x] Checkpoint controls reappear after resume
+- [x] Run status changes to `paused` on pause
+- [x] Run status changes to `in_progress` on resume
+- [x] `paused_at` timestamp is set on pause
+- [x] `last_resumed_at` timestamp is set on resume
+- [x] run_info.json is updated with pause/resume state
+- [x] Events logged to system.log
+- [x] Frontend compiles without errors
+
+### Run Status Flow (Updated with Pause/Resume)
+
+```
+not_started → [POST /api/runs/{id}/start] → in_progress
+                                          ↓
+                                      (pause between checkpoints)
+                                          ↓
+                                         paused ──────────┐
+                                          ↓               │
+                                          │ (resume)       │
+                                          ↓               │
+                                    in_progress ◄────────┘
+```
+
+### Bug Fixes Applied (Slice 8)
+None - implementation was straightforward on existing solid foundation.
+
+### Running the Application
+
+**Backend:**
+```bash
+# Install Python dependencies
+pip install -r requirements.txt
+
+# Start backend server
+python main.py
+# API available at http://localhost:8000
+# Run endpoints documented in Swagger at http://localhost:8000/docs
+```
+
+**Frontend:**
+```bash
+cd frontend
+npm install
+npm run dev
+# Frontend available at http://localhost:3000
+```
+
+### Testing the Complete Flow
+
+1. Create a pipeline with human-only checkpoints
+2. Start a run (Slice 6)
+3. Execute checkpoint 0 and approve completion (Slice 7)
+4. See "Pause Pipeline" button appear
+5. Click pause - status changes to `paused`
+6. See "Resume Pipeline" button appear
+7. Click resume - status changes to `in_progress` and next checkpoint is created
+8. Continue execution normally
+
+---
+
+## 🎉 PHASE 2: 3/5 COMPLETE 🔵
+
+**Slices 6-8 of 5 completed for Phase 2!**
 
 ---
 
@@ -1060,18 +1249,73 @@ npm run dev
 - ✅ Phase 1 (Slices 1-5): COMPLETE - Pipeline & Checkpoint CRUD
 - ✅ Phase 2, Slice 6: COMPLETE - Start Pipeline Run
 - ✅ Phase 2, Slice 7: COMPLETE - Execute Human-Only Checkpoints
-- ⏳ Phase 2, Slice 8: NEXT - Pause & Resume Runs
+- ✅ Phase 2, Slice 8: COMPLETE - Pause & Resume Runs
+- ⏳ Phase 2, Slice 9: NEXT - View Run History & Artifacts
 
 ### Key Files to Reference:
-- `src/services/execution_service.py` - Checkpoint execution workflow (just completed)
-- `src/api/routes/executions.py` - Execution API endpoints (just completed)
-- `frontend/src/pages/RunDetail.tsx` - Run detail UI with execution controls (just completed)
-- `src/services/run_service.py` - Run management logic (for next slice)
+- `src/services/run_service.py` - Run management logic with pause/resume (just completed)
+- `src/api/routes/runs.py` - Run API endpoints with pause/resume (just completed)
+- `frontend/src/pages/RunDetail.tsx` - Run detail UI with pause/resume controls in header (just completed)
+- `src/services/execution_service.py` - Checkpoint execution workflow
 - `src/services/checkpoint_service.py` - Checkpoint CRUD operations
+- `src/models/schemas.py` - Pydantic schemas for all models
 - `completion_status.md` - This file - full project history
+- `README.md` - Project overview and quick status
 
 ### Known Working Patterns:
 - **SQLAlchemy JSON columns**: Always use `flag_modified(model, "column_name")` after modifying JSON fields
 - **FastAPI dependencies**: Use `session: Session = Depends(get_db)` pattern for query params with defaults
 - **Frontend state management**: Clear `currentExecution` state when pipeline completes to hide buttons
 - **Execution detail queries**: Sort interactions by timestamp to get most recent submission
+- **Pause condition**: Allow pause anytime when run is `in_progress` (`canPause = run?.status === 'in_progress'`)
+- **Paused state**: When paused, hide checkpoint controls using `{!isPaused && currentExecution && ...}` pattern
+
+---
+
+## 🚀 NEXT SESSION: Phase 2, Slice 9 - View Run History & Artifacts
+
+### Overview for Next Session
+
+**Goal**: Implement the ability to view past pipeline runs, their checkpoint executions, and download/view artifacts.
+
+**Planned Features**:
+1. List all runs for a pipeline with filtering options
+2. View detailed checkpoint execution history for a run
+3. Download artifacts from checkpoint executions
+4. Preview artifacts in the UI (JSON, Markdown rendering)
+
+**Backend Work**:
+- Enhance existing list/runs endpoint if needed
+- Add artifact download endpoint: `GET /api/artifacts/{artifact_id}/download`
+- Get artifact content endpoint for preview: `GET /api/artifacts/{artifact_id}/content`
+
+**Frontend Work**:
+- Add run history page/section showing all runs with status badges
+- Add artifact list view on run detail page
+- Add artifact download functionality
+- Add artifact preview component (JSON syntax highlighting, Markdown rendering)
+
+**API Endpoints to Implement**:
+- `GET /api/artifacts/{artifact_id}` - Get artifact metadata
+- `GET /api/artifacts/{artifact_id}/download` - Download artifact file
+- `GET /api/artifacts/{artifact_id}/content` - Get artifact content for preview
+
+**Files Likely to Modify**:
+- `src/services/artifact_service.py` (NEW) - Artifact business logic
+- `src/api/routes/artifacts.py` (NEW) - Artifact API endpoints
+- `frontend/src/pages/RunHistory.tsx` (NEW) - Run history listing page
+- `frontend/src/pages/RunDetail.tsx` - Add artifacts section
+- `frontend/src/components/ArtifactPreview.tsx` (NEW) - Artifact preview component
+
+**Database Models Already Exist** (No changes needed):
+- `Artifact` model already exists in `src/db/models.py`
+- Artifacts are already linked to `CheckpointExecution`
+
+**Key Considerations**:
+- Artifacts are stored in `runs/v{version}/checkpoint_{position}_name/outputs/`
+- Artifact files follow naming: `{artifact_name}_{artifact_id}_v{version}.{format}`
+- Need to handle different artifact formats (JSON, MD, TXT, etc.)
+- Large files should use streaming download
+- Security: Only allow downloading artifacts from runs the user has access to
+
+

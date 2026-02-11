@@ -602,6 +602,55 @@ export function RunDetail({ runId }: RunDetailProps) {
     }
   };
 
+  const handlePauseRun = async () => {
+    if (!runId) return;
+
+    try {
+      setActionLoading(true);
+      setActionMessage(null);
+      const data = await api.pauseRun(runId);
+      setRun(data);
+      setActionMessage('Run paused successfully!');
+      setTimeout(() => {
+        fetchData();
+        setActionMessage(null);
+      }, 1000);
+    } catch (err) {
+      setActionMessage(err instanceof Error ? err.message : 'Failed to pause run');
+      setTimeout(() => setActionMessage(null), 3000);
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
+  const handleResumeRun = async () => {
+    if (!runId) return;
+
+    try {
+      setActionLoading(true);
+      setActionMessage(null);
+      const data = await api.resumeRun(runId);
+      setRun(data);
+      setActionMessage('Run resumed successfully!');
+      setTimeout(() => {
+        fetchData();
+        setActionMessage(null);
+      }, 1000);
+    } catch (err) {
+      setActionMessage(err instanceof Error ? err.message : 'Failed to resume run');
+      setTimeout(() => setActionMessage(null), 3000);
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
+  // Check if we can pause - allow pausing whenever run is in_progress
+  // Pause should be available before starting a checkpoint or between checkpoints
+  const canPause = run?.status === 'in_progress';
+
+  // When paused, hide all checkpoint controls - user must resume first
+  const isPaused = run?.status === 'paused';
+
   const getStatusColor = (status: string) => {
     switch (status) {
       case 'completed':
@@ -664,10 +713,58 @@ export function RunDetail({ runId }: RunDetailProps) {
           <h1 className="text-2xl font-bold text-gray-900">
             {run.pipeline_name || 'Pipeline'} - Run v{run.run_version}
           </h1>
+          <span className={`px-3 py-1 rounded-full text-sm font-medium ${getStatusColor(run.status)}`}>
+            {run.status.replace('_', ' ')}
+          </span>
         </div>
-        <span className={`px-3 py-1 rounded-full text-sm font-medium ${getStatusColor(run.status)}`}>
-          {run.status.replace('_', ' ')}
-        </span>
+
+        {/* Pause/Resume Buttons in Header */}
+        <div className="flex items-center gap-2">
+          {canPause && (
+            <button
+              onClick={handlePauseRun}
+              disabled={actionLoading}
+              className="px-3 py-1.5 bg-yellow-500 text-white rounded-lg hover:bg-yellow-600 disabled:bg-gray-400 disabled:cursor-not-allowed flex items-center gap-2 text-sm font-medium"
+              title="Pause the pipeline"
+            >
+              {actionLoading ? (
+                <>
+                  <div className="animate-spin rounded-full h-3 w-3 border-b-2 border-white"></div>
+                  Pausing...
+                </>
+              ) : (
+                <>
+                  <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
+                    <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zM7 8a1 1 0 012 0v4a1 1 0 11-2 0V8zm5-1a1 1 0 00-1 1v4a1 1 0 102 0V8a1 1 0 00-1-1z" clipRule="evenodd" />
+                  </svg>
+                  Pause
+                </>
+              )}
+            </button>
+          )}
+          {isPaused && (
+            <button
+              onClick={handleResumeRun}
+              disabled={actionLoading}
+              className="px-3 py-1.5 bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:bg-gray-400 disabled:cursor-not-allowed flex items-center gap-2 text-sm font-medium"
+              title="Resume the pipeline"
+            >
+              {actionLoading ? (
+                <>
+                  <div className="animate-spin rounded-full h-3 w-3 border-b-2 border-white"></div>
+                  Resuming...
+                </>
+              ) : (
+                <>
+                  <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
+                    <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM9.555 7.168A1 1 0 008 8v4a1 1 0 001.555.832l3-2a1 1 0 000-1.664l-3-2z" clipRule="evenodd" />
+                  </svg>
+                  Resume
+                </>
+              )}
+            </button>
+          )}
+        </div>
       </div>
 
       {/* Action Messages */}
@@ -771,8 +868,8 @@ export function RunDetail({ runId }: RunDetailProps) {
         )}
       </div>
 
-      {/* Current Execution (if active) */}
-      {currentExecution && currentExecution.status !== 'completed' && currentExecution.status !== 'failed' && (
+      {/* Current Execution (if active) - Hide when paused */}
+      {!isPaused && currentExecution && currentExecution.status !== 'completed' && currentExecution.status !== 'failed' && (
         <div className="mb-6">
           <h2 className="text-lg font-semibold mb-4">Current Checkpoint</h2>
           <CheckpointExecutionCard
@@ -780,6 +877,24 @@ export function RunDetail({ runId }: RunDetailProps) {
             onAction={handleExecutionAction}
             loading={actionLoading}
           />
+        </div>
+      )}
+
+      {/* Paused State Message - Show instead of current execution when paused */}
+      {isPaused && (
+        <div className="mb-6 bg-yellow-50 border border-yellow-200 rounded-lg p-6 text-center">
+          <svg className="w-12 h-12 text-yellow-600 mx-auto mb-3" fill="currentColor" viewBox="0 0 20 20">
+            <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zM7 8a1 1 0 012 0v4a1 1 0 11-2 0V8zm5-1a1 1 0 00-1 1v4a1 1 0 102 0V8a1 1 0 00-1-1z" clipRule="evenodd" />
+          </svg>
+          <h3 className="text-lg font-semibold text-yellow-900 mb-2">Pipeline is Paused</h3>
+          <p className="text-sm text-yellow-800 mb-4">
+            Resume the pipeline to continue with the next checkpoint.
+          </p>
+          {currentExecution && (
+            <p className="text-xs text-yellow-700">
+              Current checkpoint: {currentExecution.checkpoint_name || `Checkpoint ${currentExecution.checkpoint_position + 1}`}
+            </p>
+          )}
         </div>
       )}
 
@@ -853,13 +968,15 @@ export function RunDetail({ runId }: RunDetailProps) {
 
       {/* Info Box for Slice 7 */}
       <div className="mt-6 bg-blue-50 border border-blue-200 rounded-lg p-4">
-        <h3 className="font-semibold text-blue-900 mb-2">ℹ️ Slice 7 Features</h3>
+        <h3 className="font-semibold text-blue-900 mb-2">ℹ️ Slice 7 & 8 Features</h3>
         <ul className="text-sm text-blue-800 space-y-1">
           <li>• Approve checkpoint start (for checkpoints requiring approval)</li>
           <li>• Fill out forms for human-only checkpoints</li>
           <li>• Approve checkpoint completion with artifact promotion</li>
           <li>• Request revisions with feedback</li>
           <li>• Automatic progression to next checkpoint</li>
+          <li>• Pause pipeline between checkpoints (Slice 8)</li>
+          <li>• Resume paused pipeline (Slice 8)</li>
         </ul>
       </div>
     </div>

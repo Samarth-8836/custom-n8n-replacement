@@ -178,3 +178,62 @@ def get_run(
         checkpoint_executions=checkpoint_executions,
         **detail,
     )
+
+
+@router.post(
+    "/{run_id}/pause",
+    response_model=PipelineRunDetailResponse,
+    summary="Pause a pipeline run",
+    description="Pause a pipeline run. Can only be paused between checkpoints.",
+)
+def pause_run(
+    run_id: str,
+    session: Session = Depends(get_db),
+) -> PipelineRunDetailResponse:
+    """
+    Pause a pipeline run.
+
+    Pause can only occur between checkpoints when no checkpoint execution
+    is currently in progress. The latest checkpoint must be in a completed
+    or failed state.
+    """
+    try:
+        run = RunService.pause_run(session, run_id)
+        session.commit()
+
+        return RunService.get_run_detail(session, run_id)
+
+    except ValueError as e:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(e),
+        )
+
+
+@router.post(
+    "/{run_id}/resume",
+    response_model=PipelineRunDetailResponse,
+    summary="Resume a paused pipeline run",
+    description="Resume a paused pipeline run and continue execution.",
+)
+def resume_run(
+    run_id: str,
+    session: Session = Depends(get_db),
+) -> PipelineRunDetailResponse:
+    """
+    Resume a paused pipeline run.
+
+    Resuming will create the next checkpoint execution if the current
+    checkpoint is completed, or simply change status back to in_progress.
+    """
+    try:
+        run = RunService.resume_run(session, run_id)
+        session.commit()
+
+        return RunService.get_run_detail(session, run_id)
+
+    except ValueError as e:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(e),
+        )

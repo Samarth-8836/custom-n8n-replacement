@@ -11,11 +11,11 @@ A pipeline automation tool with agentic AI capabilities. This system allows you 
 - Slice 4: Create Checkpoint Definitions - Human-only mode
 - Slice 5: Update & Delete Checkpoints + Reorder
 
-**Phase 2 (Pipeline Execution Engine)** - 🔄 IN PROGRESS (2/5 slices)
+**Phase 2 (Pipeline Execution Engine)** - 🔄 IN PROGRESS (3/5 slices)
 - Slice 6: Start Pipeline Run - ✅ **COMPLETE**
 - Slice 7: Execute Human-Only Checkpoints - ✅ **COMPLETE**
-- Slice 8: Pause & Resume Runs - ⏳ **NEXT**
-- Slice 9: View Run History & Artifacts
+- Slice 8: Pause & Resume Runs - ✅ **COMPLETE**
+- Slice 9: View Run History & Artifacts - ⏳ **NEXT**
 - Slice 10: Extend Previous Run (Version Extension)
 
 **Phase 3: Rollback System** - ⏳ PENDING
@@ -371,7 +371,7 @@ not_started → [POST /api/runs/{id}/start] → in_progress
 
 ---
 
-### ✅ Phase 2, Slice 7: Execute Human-Only Checkpoints (COMPLETE ✅)
+### ✅ Phase 2, Slice 7: Execute Human-Only Checkpoints (COMPLETE - 2026-02-10)
 
 **Implemented:**
 - [x] Approve checkpoint start
@@ -381,6 +381,9 @@ not_started → [POST /api/runs/{id}/start] → in_progress
 - [x] Move to next checkpoint automatically
 - [x] Request revision with feedback
 - [x] Auto-advance to next checkpoint
+- [x] Per-pipeline state.db creation
+- [x] System logging (system.log)
+- [x] run_info.json updates
 
 **API Endpoints Implemented:**
 - `GET /api/executions/{id}` - Get execution details with form config
@@ -389,7 +392,7 @@ not_started → [POST /api/runs/{id}/start] → in_progress
 - `POST /api/executions/{id}/approve-complete` - Approve checkpoint completion
 - `POST /api/executions/{id}/request-revision` - Request revision
 
-**Bug Fixes Applied (Slice 7):**
+**Bug Fixes Applied (Slice 7 - Initial):**
 1. **FastAPI parameter ordering** - Fixed: path params → session → body with default
 2. **Duplicate dependency annotation** - Fixed: removed duplicate `= Depends(get_db)`
 3. **Checkpoints with 0 input fields stuck** - Fixed: added "Continue" button
@@ -397,25 +400,77 @@ not_started → [POST /api/runs/{id}/start] → in_progress
 5. **Revision form data not updating** - Fixed: sort interactions by timestamp
 6. **Checkpoint order not persisting** - Fixed: added `flag_modified()` calls
 
+**Bug Fixes Applied (Slice 7 - Additional - 2026-02-10):**
+7. **Temp workspace cleanup** - Fixed: temp directories now deleted after next checkpoint starts (not just at pipeline completion)
+8. **Per-pipeline state.db not created** - Fixed: added `init_pipeline_db(pipeline_id)` call in `pipeline_service.py`
+9. **Artifacts duplicated during revisions** - Fixed: artifact now overwrites existing one instead of creating new
+10. **Form data not displaying after submit** - Fixed: return `form_data` in submit response and immediately update frontend state
+11. **run_info.json never updated** - Fixed: added `save_run_info()` calls when run starts and completes
+12. **system.log file not implemented** - Fixed: created `src/utils/logger.py` with PipelineLogger class
+
 **Key Files Created (Slice 7):**
 - `src/services/execution_service.py` - Checkpoint execution business logic
 - `src/api/routes/executions.py` - Execution control endpoints
+- `src/utils/logger.py` - Pipeline system logger with thread-safe file operations
 
 **Key Files Modified (Slice 7):**
 - `src/models/schemas.py` - Added execution control schemas
 - `src/api/app.py` - Registered executions router
+- `src/services/pipeline_service.py` - Added per-pipeline state.db initialization
+- `src/services/run_service.py` - Added run_info.json updates
 - `frontend/src/lib/api.ts` - Added execution API methods
 - `frontend/src/types/pipeline.ts` - Added execution types
 - `frontend/src/pages/RunDetail.tsx` - Complete rewrite with execution controls UI
 
 ---
 
-### ⏳ Phase 2, Slice 8: Pause & Resume Runs
+### ✅ Phase 2, Slice 8: Pause & Resume Runs (COMPLETE - 2026-02-10)
 
-**Planned:**
-- [ ] Pause run between checkpoints
-- [ ] Resume paused run
-- [ ] Store and display pause state
+**Implemented:**
+- [x] Pause run between checkpoints
+- [x] Resume paused run
+- [x] Store and display pause state
+- [x] Hide checkpoint controls when paused (must resume to continue)
+
+**Files Created:**
+None (all modifications to existing files)
+
+**Files Modified:**
+- `src/services/run_service.py` - Added `pause_run()` and `resume_run()` methods
+- `src/api/routes/runs.py` - Added pause and resume endpoints
+- `frontend/src/lib/api.ts` - Added `pauseRun()` and `resumeRun()` methods
+- `frontend/src/pages/RunDetail.tsx` - Added Pause/Resume buttons in header and state handling
+
+**Features:**
+1. **Pause Pipeline Run**
+   - Pause button always visible in header when run is `in_progress`
+   - Can pause at any checkpoint state (pending, waiting_approval_to_start, completed, etc.)
+   - Sets status to `paused` with `paused_at` timestamp
+   - Updates `run_info.json` with pause state
+   - Logs pause event to `system.log`
+
+2. **Resume Paused Run**
+   - Resume button always visible in header when run is `paused`
+   - Sets status back to `in_progress` with `last_resumed_at` timestamp
+   - Automatically creates next checkpoint execution if ready
+   - Updates `run_info.json` with resume state
+   - Logs resume event to `system.log`
+
+3. **UI Controls - Pause/Resume in Header**
+   - Yellow "Pause" button in header (visible when `in_progress`)
+   - Green "Resume" button in header (visible when `paused`)
+   - Checkpoint controls hidden when paused
+   - Yellow "Pipeline is Paused" message shown instead of current execution
+   - Must resume to continue interacting with checkpoints
+
+**Behavior:**
+- When paused, ALL checkpoint controls (Approve Start, Submit Form, etc.) are hidden
+- User must click Resume to see and interact with the checkpoint
+- This makes pause/resume meaningful - the pipeline is truly "stopped" until resumed
+
+**API Endpoints:**
+- `POST /api/runs/{run_id}/pause` - Pause a pipeline run
+- `POST /api/runs/{run_id}/resume` - Resume a paused pipeline run
 
 ---
 
@@ -506,6 +561,42 @@ pytest --cov=src
 ## Contributing
 
 This is an active development project. See `completion_status.md` for detailed progress tracking.
+
+---
+
+## Session Continuation Instructions
+
+When continuing work in a new session, follow these steps:
+
+1. **Read Key Files First:**
+   - `project_information.md` - Full project specification and requirements
+   - `completion_status.md` - Detailed slice-by-slice progress tracking with all bug fixes
+   - `README.md` - This file, for quick status reference
+
+2. **Current Project Status:**
+   - **Phase 1 (Foundation & Core Infrastructure)**: ✅ COMPLETE (Slices 1-5)
+   - **Phase 2 (Pipeline Execution Engine)**: 🔄 IN PROGRESS (Slices 6-7 complete, Slice 8 next)
+   - **Phase 3 (Rollback System)**: ⏳ PENDING
+   - **Phase 4 (Agent Execution)**: ⏳ PENDING
+   - **Phase 5 (Script Execution & Polish)**: ⏳ PENDING
+
+3. **Next Slice to Implement:**
+   - **Slice 8: Pause & Resume Runs** - See `project_information.md` for detailed requirements
+
+4. **Important Context:**
+   - Slice 7 included extensive bug fixes (12 total) documented in `completion_status.md`
+   - All file system issues have been resolved (temp cleanup, state.db creation, logging)
+   - The codebase is stable and ready for Slice 8 implementation
+
+5. **Key Files to Understand:**
+   - `src/services/execution_service.py` - Checkpoint execution workflow
+   - `src/services/run_service.py` - Pipeline run lifecycle management
+   - `src/core/file_manager.py` - File system operations
+   - `src/utils/logger.py` - System logging implementation
+
+6. **Testing Pipeline:**
+   - Test pipeline ID: `9bcd0a68-75e5-46f5-99b7-51748fa34de1`
+   - Used for Slice 7 bug fix validation
 
 ---
 
