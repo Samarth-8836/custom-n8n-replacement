@@ -7,12 +7,97 @@
  */
 
 import { useEffect, useState, useCallback } from 'react';
-import type { PipelineRunDetail, CheckpointExecutionDetail, FormField, ArtifactSummary } from '../types/pipeline';
+import type { PipelineRunDetail, CheckpointExecutionDetail, FormField, ArtifactSummary, PreviousVersionArtifact } from '../types/pipeline';
 import { api } from '../lib/api';
 import { ArtifactPreview } from '../components/ArtifactPreview';
 
 interface RunDetailProps {
   runId: string;
+}
+
+// Render a previous version artifact
+function PreviousVersionArtifact({ artifact }: { artifact: PreviousVersionArtifact }) {
+  const [showPreview, setShowPreview] = useState(false);
+  const [content, setContent] = useState<string | null>(null);
+  const [loading, setLoading] = useState(false);
+
+  const handleTogglePreview = async () => {
+    if (showPreview && content) {
+      setShowPreview(false);
+      return;
+    }
+
+    if (showPreview) return;
+
+    // For text-based artifacts with small content, we already have it inline
+    const textFormats = ['json', 'md', 'txt', 'py', 'html', 'csv', 'mmd'];
+    if (textFormats.includes(artifact.format) && artifact.size_bytes && artifact.size_bytes <= 10000) {
+      setContent(artifact.content);
+      setShowPreview(true);
+      return;
+    }
+
+    // For larger files, fetch content
+    setLoading(true);
+    try {
+      const data = await api.getArtifactContent(artifact.artifact_id);
+      setContent(data.content);
+      setShowPreview(true);
+    } catch (err) {
+      console.error(`Failed to load content for artifact ${artifact.artifact_id}:`, err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const formatSize = (bytes: number) => {
+    return (bytes / 1024).toFixed(1);
+  };
+
+  const formatIcon = (format: string) => {
+    switch (format) {
+      case 'json': return '📋';
+      case 'md': return '📝';
+      case 'txt': return '📄';
+      case 'py': return '🐍';
+      case 'html': return '🌐';
+      case 'csv': return '📊';
+      default: return '📎';
+    }
+  };
+
+  return (
+    <div className="border border-dashed border-purple-200 bg-purple-50 rounded p-4 mb-4">
+      <div className="flex items-center justify-between mb-2">
+        <div className="flex items-center gap-2">
+          <span className="text-lg">{formatIcon(artifact.format)}</span>
+          <div>
+            <h4 className="font-medium text-purple-900">{artifact.artifact_name}</h4>
+            <p className="text-xs text-purple-600">From v{artifact.previous_run_version}</p>
+          </div>
+        </div>
+        <button
+          onClick={handleTogglePreview}
+          disabled={loading}
+          className="text-purple-600 hover:text-purple-800 text-sm font-medium"
+          title={showPreview ? 'Hide' : 'Show'}
+        >
+          {loading ? 'Loading...' : showPreview ? 'Hide' : 'Preview'}
+        </button>
+      </div>
+      <p className="text-xs text-gray-500">
+        {artifact.size_bytes ? `${formatSize(artifact.size_bytes)} KB` : 'Unknown size'}
+      </p>
+      {showPreview && content && (
+        <div className="mt-3 border-t border-purple-200 pt-3">
+          <p className="text-sm font-medium mb-2 text-purple-800">Artifact Content:</p>
+          <pre className="text-xs overflow-auto max-h-60 bg-gray-50 p-2 rounded border border-gray-200">
+            {content}
+          </pre>
+        </div>
+      )}
+    </div>
+  );
 }
 
 // Render a form input field based on its type
@@ -237,6 +322,26 @@ function CheckpointExecutionCard({
           </span>
         )}
       </div>
+
+      {/* Slice 10: Previous Version Artifacts Section */}
+      {execution.previous_version_artifacts && execution.previous_version_artifacts.length > 0 && (
+        <div className="mb-4 p-4 bg-purple-50 border border-purple-200 rounded-lg">
+          <p className="text-sm font-medium mb-2 text-purple-900">
+            Previous Version (v{execution.previous_version_artifacts[0].previous_run_version}) Artifacts:
+          </p>
+          <p className="text-xs text-purple-700 mb-3">
+            These artifacts from the same checkpoint in a previous run are provided for reference.
+          </p>
+          <div className="space-y-2">
+            {execution.previous_version_artifacts.map((artifact, idx) => (
+              <PreviousVersionArtifact
+                key={`${execution.execution_id}-prev-${idx}`}
+                artifact={artifact}
+              />
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* Instructions for human-only checkpoints */}
       {instructions && execution.status !== 'completed' && (
@@ -1036,7 +1141,7 @@ export function RunDetail({ runId }: RunDetailProps) {
         )}
       </div>
 
-      {/* Info Box for Slice 7-9 */}
+      {/* Info Box for Slice 7-10 */}
       <div className="mt-6 bg-blue-50 border border-blue-200 rounded-lg p-4">
         <h3 className="font-semibold text-blue-900 mb-2">ℹ️ Features</h3>
         <ul className="text-sm text-blue-800 space-y-1">
@@ -1048,6 +1153,7 @@ export function RunDetail({ runId }: RunDetailProps) {
           <li>• Pause pipeline between checkpoints (Slice 8)</li>
           <li>• Resume paused pipeline (Slice 8)</li>
           <li>• View and download checkpoint artifacts (Slice 9)</li>
+          <li>• Previous version artifacts context (Slice 10)</li>
         </ul>
       </div>
     </div>

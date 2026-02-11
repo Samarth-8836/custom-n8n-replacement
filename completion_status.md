@@ -13,6 +13,8 @@
 | Slice 7 | ✅ Complete | 2026-02-10 | Execute Human-Only Checkpoints - Full execution workflow |
 | Slice 8 | ✅ Complete | 2026-02-10 | Pause & Resume Runs - Pause between checkpoints |
 | Slice 9 | ✅ Complete | 2026-02-11 | View Run History & Artifacts - Download and preview artifacts |
+| Slice 10 | ✅ Complete | 2026-02-11 | Extend Previous Run (Version Extension) |
+| Slice 10 | ✅ Complete | 2026-02-11 | Extend Previous Run (Version Extension) |
 
 ---
 
@@ -1353,6 +1355,127 @@ npm run dev
 
 ---
 
+## 🎉 PHASE 2: 5/5 COMPLETE 🌟
+
+**All 5 slices of Phase 2 are now complete!**
+
+---
+
+## Phase 2, Slice 10: Extend Previous Run (Version Extension) (COMPLETE ✅)
+
+**Date**: 2026-02-11
+
+### Overview
+Implemented version extension functionality so v2 builds on v1 outputs automatically. Users can now see artifacts from the same checkpoint in previous runs as reference when executing a new run.
+
+### Backend Implementation
+
+**Files Modified:**
+| File | Changes |
+|------|---------|
+| `src/services/artifact_service.py` | Added `get_previous_version_artifacts()` method to fetch artifacts from same checkpoint in previous run |
+| `src/services/execution_service.py` | Updated `get_execution_detail()` to include previous version artifacts |
+| `src/models/schemas.py` | Added `previous_version_artifacts` and `extends_from_run_version` to `CheckpointExecutionDetailResponse` |
+
+**New Method:**
+```python
+def get_previous_version_artifacts(
+    session: Session,
+    execution_id: str,
+    checkpoint_position: int,
+    previous_run_id: str
+) -> list[dict]:
+    """
+    Get artifacts from same checkpoint in previous run version.
+    Returns list of artifacts with content for text-based formats.
+    """
+```
+
+**Key Features:**
+- Automatically loads artifacts from previous run's same checkpoint position
+- Returns only promoted (permanent) artifacts
+- Includes artifact content for text-based formats (json, md, txt, py, html, csv, mmd)
+- Content size limited to 10KB for inline display
+- Returns empty list if no previous run or no artifacts found
+
+### Frontend Implementation
+
+**Files Modified:**
+| File | Changes |
+|------|---------|
+| `frontend/src/types/pipeline.ts` | Added `PreviousVersionArtifact` interface and updated `CheckpointExecutionDetail` |
+| `frontend/src/pages/RunDetail.tsx` | Added `PreviousVersionArtifact` component to display previous version artifacts |
+
+**New Component:**
+```tsx
+function PreviousVersionArtifact({ artifact }: { artifact: PreviousVersionArtifact }) {
+  // Displays artifact with:
+  // - Format icon (📋 📝 etc.)
+  // - Artifact name with version label
+  // - Preview button (for text-based formats)
+  // - File size display
+  // - Content preview (inline or fetched)
+}
+```
+
+**UI Features:**
+- Purple-themed styling to distinguish from current artifacts
+- Dashed border to show these are from previous version
+- "From vX" label on each artifact
+- Preview functionality for text-based formats
+- Content fetched for larger files via API
+- Size display in KB
+
+### API Changes
+
+**Schema Updates:**
+- `CheckpointExecutionDetailResponse` now includes:
+  - `previous_version_artifacts: list[dict]` - Artifacts from same checkpoint in previous run
+  - `extends_from_run_version: Optional[int]` - Version this run extends from
+
+### Testing Checklist (ALL PASSED ✅)
+
+- [x] Backend imports without errors
+- [x] Frontend compiles without TypeScript errors
+- [x] `get_previous_version_artifacts` method correctly queries database
+- [x] `get_execution_detail` includes previous version artifacts
+- [x] Previous version artifacts displayed in UI with purple styling
+- [x] Artifact preview functionality works for previous versions
+- [x] Version number correctly displayed on each artifact
+
+### User Flow for Version Extension
+
+1. User completes v1 run with checkpoint 0, generating artifacts
+2. User starts new run (v2) - system automatically extends from v1
+3. When v2 checkpoint 0 executes:
+   - UI displays "Previous Version (v1) Artifacts" section
+   - Shows artifacts from v1's checkpoint 0
+   - User can view/reference previous outputs
+4. User fills out form with v2 data
+5. Process continues for all checkpoints
+
+### Files Modified Summary
+
+**Backend:**
+- `src/services/artifact_service.py` - Added `get_previous_version_artifacts()` method
+- `src/services/execution_service.py` - Updated `get_execution_detail()` to include previous version artifacts
+- `src/models/schemas.py` - Updated `CheckpointExecutionDetailResponse` schema
+
+**Frontend:**
+- `frontend/src/types/pipeline.ts` - Added `PreviousVersionArtifact` interface
+- `frontend/src/pages/RunDetail.tsx` - Added `PreviousVersionArtifact` component and updated info box
+
+### Deliverable
+
+Version extension now works end-to-end:
+1. ✅ New runs automatically extend from latest valid previous run
+2. ✅ `previous_run_id` and `extends_from_run_version` correctly set
+3. ✅ Previous version artifacts loaded when checkpoint starts
+4. ✅ UI displays previous version artifacts with clear visual distinction
+5. ✅ Version information shown throughout UI (v1, v2, etc.)
+
+---
+
 ## 📋 SESSION CONTINUATION NOTES
 
 ### Quick Start for Next Session:
@@ -1384,16 +1507,17 @@ npm run dev
 - ✅ Phase 2, Slice 7: COMPLETE - Execute Human-Only Checkpoints
 - ✅ Phase 2, Slice 8: COMPLETE - Pause & Resume Runs
 - ✅ Phase 2, Slice 9: COMPLETE - View Run History & Artifacts (with preview button fix)
-- ⏳ Phase 2, Slice 10: NEXT - Extend Previous Run (Version Extension)
+- ✅ Phase 2, Slice 10: COMPLETE - Extend Previous Run (Version Extension)
+- ⏳ Phase 3: Rollback System - NEXT
 
 ### Key Files to Reference:
-- `src/services/artifact_service.py` - Artifact management logic (Slice 9 complete)
+- `src/services/artifact_service.py` - Artifact management logic (Slice 9 complete, added `get_previous_version_artifacts()` for Slice 10)
 - `src/api/routes/artifacts.py` - Artifact API endpoints (Slice 9 complete)
 - `frontend/src/components/ArtifactPreview.tsx` - Artifact preview component (Slice 9 complete, bug fixed)
-- `frontend/src/pages/RunDetail.tsx` - Run detail UI with artifacts display (Slice 9 complete)
+- `frontend/src/pages/RunDetail.tsx` - Run detail UI with artifacts display (Slice 9 complete, added previous version display for Slice 10)
 - `src/services/run_service.py` - Run management logic with pause/resume (reference for Slice 10)
-- `src/services/execution_service.py` - Checkpoint execution workflow (reference for Slice 10)
-- `src/models/schemas.py` - Pydantic schemas for all models (includes artifact schemas)
+- `src/services/execution_service.py` - Checkpoint execution workflow (updated for Slice 10)
+- `src/models/schemas.py` - Pydantic schemas for all models (updated for Slice 10)
 - `completion_status.md` - This file - full project history
 - `README.md` - Project overview and quick status
 

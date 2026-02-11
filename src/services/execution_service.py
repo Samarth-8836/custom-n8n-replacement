@@ -23,6 +23,7 @@ from src.db.models import (
     Pipeline,
     PipelineRun,
 )
+from src.services.artifact_service import ArtifactService
 from src.utils.logger import get_logger
 
 
@@ -112,6 +113,20 @@ class ExecutionService:
                 except json.JSONDecodeError:
                     form_data = {"raw": submit_interaction.user_input}
 
+        # Slice 10: Get previous version artifacts if extending from a previous run
+        previous_version_artifacts = []
+        extends_from_run_version = None
+
+        if run and run.previous_run_id:
+            # Get artifacts from same checkpoint position in previous run
+            previous_version_artifacts = ArtifactService.get_previous_version_artifacts(
+                session=session,
+                execution_id=execution.execution_id,
+                checkpoint_position=execution.checkpoint_position,
+                previous_run_id=run.previous_run_id
+            )
+            extends_from_run_version = run.extends_from_run_version
+
         return {
             "execution_id": execution.execution_id,
             "run_id": execution.run_id,
@@ -136,6 +151,9 @@ class ExecutionService:
             "form_data": form_data,
             "artifacts_staged": staged_artifacts,
             "run_version": run.run_version if run else None,
+            # Slice 10: Previous version context
+            "previous_version_artifacts": previous_version_artifacts,
+            "extends_from_run_version": extends_from_run_version,
         }
 
     @staticmethod

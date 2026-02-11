@@ -5,6 +5,7 @@ Business logic for artifact management.
 Handles retrieving artifact metadata, content, and file paths for download/preview.
 """
 
+import json
 import os
 from pathlib import Path
 from typing import Optional
@@ -12,7 +13,8 @@ from typing import Optional
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from src.db.models import Artifact, CheckpointExecution
+from src.core.file_manager import FileManager
+from src.db.models import Artifact, CheckpointExecution, CheckpointDefinition, PipelineRun
 
 
 class ArtifactService:
@@ -222,3 +224,90 @@ class ArtifactService:
             return None
 
         return artifact.file_path
+
+    @staticmethod
+    def get_previous_version_artifacts(
+        session: Session,
+        execution_id: str,
+        checkpoint_position: int,
+        previous_run_id: str
+    ) -> list[dict]:
+        """
+        Get artifacts from the same checkpoint in the previous run version.
+
+        This enables version extension where v2 can reference v1's outputs.
+
+        Args:
+            session: Database session
+            execution_id: Current execution ID (for context)
+            checkpoint_position: Current checkpoint position
+            previous_run_id: The previous run's ID to get artifacts from
+
+        Returns:
+            List of artifact dictionaries from previous version, or empty list if not found
+        """
+        if not previous_run_id:
+            return []
+
+        # Get the previous run
+        previous_run = session.execute(
+            select(PipelineRun).where(PipelineRun.run_id == previous_run_id)
+        ).scalar_one_or_none()
+
+        if not previous_run:
+            return []
+
+        # Get the checkpoint execution from the previous run at the same position
+        previous_execution = session.execute(
+            select(CheckpointExecution)
+            .where(
+                CheckpointExecution.run_id == previous_run_id,
+                CheckpointExecution.checkpoint_position == checkpoint_position
+            )
+        ).scalar_one_or_none()
+
+        if not previous_execution:
+            return []
+
+        # Get all artifacts for that execution
+        artifacts = session.execute(
+            select(Artifact).where(
+                Artifact.execution_id == previous_execution.execution_id
+            )
+        ).scalars().all()
+
+        # Filter to only promoted artifacts (permanent storage)
+        result = []
+        for art in artifacts:
+            if not art.promoted_to_permanent_at:
+                continue  # Skip non-promoted artifacts
+
+            file_path = Path(art.file_path)
+            if not file_path.exists():
+                continue  # Skip missing files
+
+            # Try to read content for text-based formats (for UI display)
+            content = None
+            text_formats = ["json", "md", "txt", "py", "html", "csv", "mmd"]
+            if art.format in text_formats:
+                try:
+                    # Only read small files for context display
+                    if file_path.stat().st_size <= 10000:  # 10KB limit for inline display
+                        with open(file_path, 'r', encoding='utf-8') as f:
+                            content = f.read()
+                except Exception:
+                    pass  # Content not critical, metadata is enough
+
+            result.append({
+                "artifact_id": art.artifact_id,
+                "artifact_name": art.artifact_name,
+                "format": art.format,
+                "file_path": str(file_path),
+                "size_bytes": art.size_bytes,
+                "created_at": art.created_at.isoformat() if art.created_at else None,
+                "content": content,
+                "is_from_previous": True,
+                "previous_run_version": previous_run.run_version,
+            })
+
+        return result

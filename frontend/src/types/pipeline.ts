@@ -210,6 +210,18 @@ export interface PipelineRunListResponse {
 // Checkpoint Execution Detail Types (Slice 7)
 // =============================================================================
 
+export interface PreviousVersionArtifact {
+  artifact_id: string;
+  artifact_name: string;
+  format: string;
+  file_path: string;
+  size_bytes: number;
+  created_at: string;
+  content: string | null;
+  is_from_previous: true;
+  previous_run_version: number;
+}
+
 export interface CheckpointExecutionDetail extends CheckpointExecutionSummary {
   run_id: string;
   temp_workspace_path: string;
@@ -224,6 +236,9 @@ export interface CheckpointExecutionDetail extends CheckpointExecutionSummary {
   form_data: Record<string, unknown> | null;
   artifacts_staged: Array<{ name: string; size: number }>;
   run_version: number | null;
+  // Slice 10: Previous version context
+  previous_version_artifacts: PreviousVersionArtifact[];
+  extends_from_run_version: number | null;
 }
 
 // Re-export InputField as FormField for use in execution context

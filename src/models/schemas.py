@@ -394,6 +394,13 @@ class CheckpointExecutionDetailResponse(CheckpointExecutionResponse):
     form_data: Optional[dict] = Field(None, description="Submitted form data")
     artifacts_staged: list[dict] = Field(default_factory=list, description="Artifacts in staging")
 
+    # Slice 10: Previous version context
+    previous_version_artifacts: list[dict] = Field(
+        default_factory=list,
+        description="Artifacts from same checkpoint in previous run version"
+    )
+    extends_from_run_version: Optional[int] = Field(None, description="Run version this run extends from")
+
     model_config = {"from_attributes": True}
 
 
