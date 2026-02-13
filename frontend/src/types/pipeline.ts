@@ -289,3 +289,62 @@ export interface ArtifactListResponse {
   execution_id: string;
   artifacts: ArtifactSummary[];
 }
+
+// =============================================================================
+// Rollback Types (Slice 11)
+// =============================================================================
+
+export type RollbackType = "checkpoint_level" | "run_level";
+
+export interface RollbackRequest {
+  rollback_type: RollbackType;
+  target_checkpoint_position: number;
+  target_run_id?: string;
+  user_reason?: string;
+}
+
+export interface RollbackResponse {
+  rollback_id: string;
+  rollback_type: string;
+  deleted_executions: string[];
+  archived_artifacts: Array<{
+    artifact_record_id: string;
+    artifact_id: string;
+    artifact_name: string;
+    original_path: string;
+    archived_path: string;
+    size_bytes: number | null;
+  }>;
+  target_checkpoint_position: number;
+  target_checkpoint_id: string;
+  archive_location: string;
+  run_status: string;
+  message?: string;
+}
+
+export interface RollbackPoint {
+  checkpoint_id: string;
+  checkpoint_name: string;
+  checkpoint_position: number;
+  execution_id: string;
+  completed_at: string;
+  is_current: boolean;
+}
+
+export interface RollbackEvent {
+  rollback_id: string;
+  rollback_type: string;
+  source_run_version: number;
+  target_run_id: string | null;
+  target_checkpoint_position: number | null;
+  triggered_by: string;
+  user_reason: string | null;
+  created_at: string;
+  archive_location: string;
+  rolled_back_items: Record<string, unknown>;
+}
+
+export interface RollbackHistoryResponse {
+  rollback_events: RollbackEvent[];
+  total_count: number;
+}

@@ -494,6 +494,79 @@ class ArtifactListResponse(BaseModel):
 
 
 # =============================================================================
+# Rollback Schemas (Slice 11)
+# =============================================================================
+
+
+class RollbackRequest(BaseModel):
+    """Schema for initiating a rollback."""
+    rollback_type: Literal["checkpoint_level", "run_level"] = Field(
+        ..., description="Type of rollback: checkpoint_level or run_level"
+    )
+    target_checkpoint_position: int = Field(
+        ..., ge=0, description="Checkpoint position to rollback to"
+    )
+    target_run_id: Optional[str] = Field(
+        None, description="Target run ID (required for run_level rollback)"
+    )
+    user_reason: Optional[str] = Field(
+        None, max_length=5000, description="Optional reason for rollback"
+    )
+
+
+class ArchivedItemSummary(BaseModel):
+    """Schema for archived item summary."""
+    item_type: str = Field(..., description="Type of archived item (run, checkpoint_execution, artifact)")
+    item_id: str = Field(..., description="ID of archived item")
+    original_path: str = Field(..., description="Original file path")
+    archived_path: str = Field(..., description="Archive path")
+    size_bytes: Optional[int] = Field(None, description="Size in bytes")
+
+
+class RollbackEventSummary(BaseModel):
+    """Schema for rollback event summary."""
+    rollback_id: str
+    rollback_type: str
+    source_run_version: int
+    target_run_id: Optional[str] = None
+    target_checkpoint_position: Optional[int] = None
+    triggered_by: str
+    user_reason: Optional[str] = None
+    created_at: str
+    archive_location: str
+    rolled_back_items: dict = Field(default_factory=dict)
+
+
+class RollbackResponse(BaseModel):
+    """Schema for rollback response."""
+    rollback_id: str = Field(..., description="UUID of rollback event")
+    rollback_type: str = Field(..., description="Type of rollback performed")
+    deleted_executions: list[str] = Field(default_factory=list, description="Deleted execution IDs")
+    archived_artifacts: list[dict] = Field(default_factory=list, description="Archived artifact info")
+    target_checkpoint_position: int = Field(..., description="Position rolled back to")
+    target_checkpoint_id: str = Field(..., description="Checkpoint ID rolled back to")
+    archive_location: str = Field(..., description="Path to archive directory")
+    run_status: str = Field(..., description="Updated run status")
+    message: Optional[str] = Field(None, description="Info message")
+
+
+class RollbackPointSummary(BaseModel):
+    """Schema for available rollback point."""
+    checkpoint_id: str
+    checkpoint_name: str
+    checkpoint_position: int
+    execution_id: str
+    completed_at: str
+    is_current: bool = Field(..., description="Whether this is the current checkpoint")
+
+
+class RollbackHistoryResponse(BaseModel):
+    """Schema for rollback history response."""
+    rollback_events: list[RollbackEventSummary]
+    total_count: int
+
+
+# =============================================================================
 # Re-export forward references
 # =============================================================================
 

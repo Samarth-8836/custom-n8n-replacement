@@ -15,7 +15,8 @@
       "Bash(cmd.exe:*)",
       "Bash(powershell:*)",
       "Bash(dir:*)",
-      "Bash(sqlite3:*)"
+      "Bash(sqlite3:*)",
+      "Bash(npx tsc:*)"
     ]
   }
 }

@@ -23,6 +23,11 @@ import type {
   ArtifactMetadata,
   ArtifactContent,
   ArtifactListResponse,
+  RollbackRequest,
+  RollbackResponse,
+  RollbackPoint,
+  RollbackEvent,
+  RollbackHistoryResponse,
 } from '../types/pipeline';
 
 const API_BASE_URL = import.meta.env.VITE_API_URL || '/api';
@@ -411,5 +416,45 @@ export const api = {
     link.click();
     document.body.removeChild(link);
     window.URL.revokeObjectURL(downloadUrl);
+  },
+
+  // =============================================================================
+  // Rollback APIs (Slice 11)
+  // =============================================================================
+
+  /**
+   * Get available rollback points for a run
+   */
+  async getRollbackPoints(runId: string): Promise<RollbackPoint[]> {
+    const response = await fetch(`${API_BASE_URL}/rollbacks/runs/${runId}/rollback-points`);
+    return handleResponse<RollbackPoint[]>(response);
+  },
+
+  /**
+   * Initiate a rollback operation
+   */
+  async initiateRollback(runId: string, data: RollbackRequest): Promise<RollbackResponse> {
+    const response = await fetch(`${API_BASE_URL}/rollbacks/runs/${runId}/rollback`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(data),
+    });
+    return handleResponse<RollbackResponse>(response);
+  },
+
+  /**
+   * Get rollback history for a run
+   */
+  async getRollbackHistory(runId: string, limit = 50): Promise<RollbackHistoryResponse> {
+    const response = await fetch(`${API_BASE_URL}/rollbacks/runs/${runId}/history?limit=${limit}`);
+    return handleResponse<RollbackHistoryResponse>(response);
+  },
+
+  /**
+   * Get rollback event details
+   */
+  async getRollbackEvent(rollbackId: string): Promise<RollbackEvent> {
+    const response = await fetch(`${API_BASE_URL}/rollbacks/events/${rollbackId}`);
+    return handleResponse<RollbackEvent>(response);
   },
 };

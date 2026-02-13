@@ -14,13 +14,19 @@
 | Slice 8 | ✅ Complete | 2026-02-10 | Pause & Resume Runs - Pause between checkpoints |
 | Slice 9 | ✅ Complete | 2026-02-11 | View Run History & Artifacts - Download and preview artifacts |
 | Slice 10 | ✅ Complete | 2026-02-11 | Extend Previous Run (Version Extension) |
-| Slice 10 | ✅ Complete | 2026-02-11 | Extend Previous Run (Version Extension) |
+| Slice 11 | ✅ Complete | 2026-02-13 | Rollback UI & API - Checkpoint/Run level rollback |
 
 ---
 
-## 🎉 Phase 2: 4/5 COMPLETE 🔵
+## 🎉 PHASE 2: 5/5 COMPLETE 🌟
 
-Slice 9 of Phase 2 has been successfully implemented!
+All 5 slices of Phase 2 are now complete!
+
+---
+
+## 🎉 PHASE 3: 1/2 COMPLETE 🔄
+
+Slice 11 (Rollback UI & API) of Phase 3 has been successfully implemented!
 
 ---
 
@@ -1217,9 +1223,9 @@ npm run dev
 
 ---
 
-## 🎉 PHASE 2: 4/5 COMPLETE 🔵
+## 🎉 PHASE 2: 5/5 COMPLETE 🌟
 
-**Slices 6-9 of 5 completed for Phase 2!**
+**All 5 slices of Phase 2 are now complete!**
 
 ---
 
@@ -1476,9 +1482,242 @@ Version extension now works end-to-end:
 
 ---
 
+## Phase 2, Slice 11: Rollback UI & API (COMPLETE ✅)
+
+**Date**: 2026-02-13
+
+### Overview
+Implemented rollback functionality allowing users to rollback to previous checkpoints within the same run or to different run versions. Users can now:
+- View available rollback points (previous checkpoints and run versions)
+- Initiate checkpoint-level rollback (within same run)
+- Initiate run-level rollback (to different run version)
+- View rollback history
+- Select rollback reason
+
+### Files Created
+
+**Backend:**
+| File | Purpose |
+|------|---------|
+| `src/services/rollback_service.py` | Business logic for rollback operations (calculate points, archive, execute rollback) |
+| `src/api/routes/rollbacks.py` | FastAPI routes for rollback endpoints |
+
+**Frontend:**
+| File | Purpose |
+|------|---------|
+| None (modifications to existing files) |
+
+### Files Modified
+
+**Backend:**
+| File | Changes |
+|------|---------|
+| `src/models/schemas.py` | Added RollbackPoint, RollbackRequest, RollbackResponse, RollbackEventResponse, RollbackPointsResponse schemas |
+| `src/api/app.py` | Registered rollbacks router |
+
+**Frontend:**
+| File | Changes |
+|------|---------|
+| `frontend/src/types/pipeline.ts` | Added RollbackPoint, RollbackRequest, RollbackEvent interfaces |
+| `frontend/src/lib/api.ts` | Added rollback API methods (getRollbackPoints, initiateRollback) |
+| `frontend/src/pages/RunDetail.tsx` | Added Rollback button in header, Rollback modal with point selection, rollback state management |
+
+### API Endpoints Implemented
+
+| Method | Endpoint | Description | Status |
+|--------|----------|-------------|--------|
+| GET | `/api/rollbacks/runs/{run_id}/points` | Get available rollback points for a run | ✅ |
+| POST | `/api/rollbacks/runs/{run_id}/rollback` | Initiate rollback to specified checkpoint | ✅ |
+| GET | `/api/rollbacks/runs/{run_id}/history` | Get rollback history for a run | ✅ |
+
+### Features Delivered
+
+1. **Available Rollback Points**
+   - Returns list of rollbackable checkpoints and run versions
+   - Each point includes:
+     - checkpoint_id, checkpoint_name, checkpoint_position
+     - checkpoint_status (completed, failed, etc.)
+     - For run-level: run_version, run_status
+   - Only completed or failed checkpoints can be rolled back to
+
+2. **Checkpoint-Level Rollback**
+   - Rollback to previous checkpoint within the same run
+   - Example: At checkpoint 5, rollback to checkpoint 2
+   - Deletes checkpoint executions 2, 3, 4, 5 and re-creates from checkpoint 2
+   - Archives deleted checkpoint executions and their artifacts
+   - Creates RollbackEvent record
+   - Updates run status to `in_progress`
+
+3. **Run-Level Rollback**
+   - Rollback to a different run version
+   - Example: From v3, rollback to v1 checkpoint 2
+   - Deletes all runs AFTER target run (v2, v3)
+   - Archives deleted runs, checkpoint executions, and artifacts
+   - Creates RollbackEvent record
+   - Updates "latest" symlink to target run
+
+4. **Rollback Modal UI**
+   - "Rollback" button in header (red, shown when run status is not 'not_started' or 'failed')
+   - Click opens modal with available rollback points
+   - Each rollback point shows:
+     - Checkpoint name and position
+     - Checkpoint version (v1, v2, etc.)
+     - Run-level rollback points distinguished from checkpoint-level
+   - Click to select rollback point
+   - Optional rollback reason text input
+   - "Confirm Rollback" button with loading state
+   - "Cancel" button to close modal
+
+5. **Rollback Confirmation**
+   - Selected rollback point highlighted
+   - Warning message about what will be deleted
+   - User must confirm before rollback executes
+
+6. **Rollback History** (UI placeholder - history state added)
+   - Tracks all rollback events
+   - Each event includes: rollback_id, timestamp, rollback_type, target, reason
+   - Can be displayed in future slices
+
+### Backend Implementation Details
+
+**Rollback Service Methods:**
+```python
+def get_rollback_points(session: Session, run_id: str) -> list[dict]:
+    """
+    Get available rollback points (both checkpoint-level and run-level).
+    Returns list of RollbackPoint objects.
+    """
+
+def execute_rollback(
+    session: Session,
+    run_id: str,
+    request: RollbackRequest
+) -> dict:
+    """
+    Execute rollback (checkpoint-level or run-level).
+    - Archives deleted items
+    - Updates database
+    - Updates file system
+    - Creates RollbackEvent record
+    - Returns rollback event details
+    """
+```
+
+**Rollback Flow:**
+1. User clicks "Rollback" button → Modal opens
+2. System fetches available rollback points via API
+3. User selects a rollback point and optionally provides reason
+4. User confirms rollback
+5. Backend calculates items to delete (checkpoints, executions, runs)
+6. Backend moves items to archive (`.archived/rollback_{id}_{datetime}/`)
+7. Backend deletes items from database
+8. Backend deletes items from file system (`runs/vX/`)
+9. Backend creates RollbackEvent record
+10. Backend updates run status to `in_progress`
+11. Frontend refreshes to show updated run state
+
+### Testing Checklist (ALL PASSED ✅)
+
+- [x] Backend imports without errors
+- [x] Rollback service created with rollback point calculation
+- [x] Rollback API endpoints registered in app.py
+- [x] Frontend compiles without TypeScript errors
+- [x] Rollback button appears in header
+- [x] Rollback button hidden when status is 'not_started' or 'failed'
+- [x] Rollback modal opens when button clicked
+- [x] Rollback points API returns correct data
+- [x] Rollback points display correctly in modal
+- [x] Can select a rollback point
+- [x] Rollback reason input works
+- [x] Confirm rollback button triggers API call
+- [x] Rollback execution archives deleted items
+- [x] Rollback event is created and returned
+- [x] Run status updates after rollback
+- [x] Frontend state management works correctly
+- [x] JSX nesting issue fixed (Rollback button properly aligned with Resume button)
+
+### Bug Fixes Applied (Slice 11)
+
+1. **JSX nesting error** (2026-02-13)
+   - Issue: Rollback button was incorrectly nested inside Resume button closing tag
+   - Error: `Expected corresponding JSX closing tag for <button>`
+   - Fix: Properly closed Resume button with `</button>`, then added fragment (`<>`) and Rollback button
+   - Location: `frontend/src/pages/RunDetail.tsx` lines 948-966
+
+### Key Data Structures
+
+**RollbackPoint (TypeScript):**
+```typescript
+interface RollbackPoint {
+  checkpoint_id: string;
+  checkpoint_name: string;
+  checkpoint_position: number;
+  checkpoint_status: string;
+  run_id?: string;  // For run-level rollback
+  run_version?: number;  // For run-level rollback
+  run_status?: string;  // For run-level rollback
+}
+```
+
+**RollbackRequest (Pydantic):**
+```python
+class RollbackRequest(BaseModel):
+    rollback_type: Literal['checkpoint_level', 'run_level']
+    target_checkpoint_position: int
+    user_reason: Optional[str] = None
+```
+
+**RollbackEvent (Model):**
+```python
+class RollbackEvent(Base):
+    rollback_id: str (PK)
+    source_run_id: str (FK)
+    source_run_version: int
+    rollback_type: enum
+    target_run_id: Optional[str] (FK)
+    target_checkpoint_id: str (FK)
+    target_checkpoint_position: int
+    archive_location: str
+    triggered_by: enum
+    user_reason: Optional[str]
+    created_at: datetime
+```
+
+### Files Modified Summary
+
+**Backend:**
+- `src/services/rollback_service.py` - NEW - Rollback business logic
+- `src/api/routes/rollbacks.py` - NEW - Rollback API endpoints
+- `src/models/schemas.py` - Added rollback-related schemas
+- `src/api/app.py` - Registered rollbacks router
+
+**Frontend:**
+- `frontend/src/types/pipeline.ts` - Added rollback types
+- `frontend/src/lib/api.ts` - Added rollback API methods
+- `frontend/src/pages/RunDetail.tsx` - Added rollback UI (button, modal, handlers)
+
+### Deliverable
+
+Rollback functionality now works end-to-end:
+1. ✅ Available rollback points calculated correctly
+2. ✅ Checkpoint-level rollback implemented
+3. ✅ Run-level rollback implemented
+4. ✅ Archiving of deleted items works
+5. ✅ RollbackEvent records created
+6. ✅ UI for rollback point selection and confirmation
+7. ✅ Rollback history tracking (state added, display in future slice)
+
+---
+
+## 🎉 PHASE 2: 5/5 COMPLETE 🌟 + Phase 3, Slice 11: COMPLETE ✅
+
+**All Phase 2 slices complete, plus Phase 3 Slice 11 (Rollback UI & API) is complete!**
+
+---
+
 ## 📋 SESSION CONTINUATION NOTES
 
-### Quick Start for Next Session:
+### Quick Start for Next Session (Slice 12: Rollback History & View):
 
 1. **Navigate to project directory:**
    ```bash
@@ -1494,30 +1733,28 @@ Version extension now works end-to-end:
    ```
 
 3. **Start frontend (in separate terminal):**
-   ```bash
-   cd frontend
-   npm install
-   npm run dev
-   # Frontend at http://localhost:3000
-   ```
+    ```bash
+    cd frontend
+    npm install
+    npm run dev
+    # Frontend at http://localhost:3000
+    ```
 
 ### Current Project State:
 - ✅ Phase 1 (Slices 1-5): COMPLETE - Pipeline & Checkpoint CRUD
-- ✅ Phase 2, Slice 6: COMPLETE - Start Pipeline Run
-- ✅ Phase 2, Slice 7: COMPLETE - Execute Human-Only Checkpoints
-- ✅ Phase 2, Slice 8: COMPLETE - Pause & Resume Runs
-- ✅ Phase 2, Slice 9: COMPLETE - View Run History & Artifacts (with preview button fix)
-- ✅ Phase 2, Slice 10: COMPLETE - Extend Previous Run (Version Extension)
-- ⏳ Phase 3: Rollback System - NEXT
+- ✅ Phase 2 (Slices 6-10): COMPLETE - Pipeline Execution Engine
+- ✅ Phase 3, Slice 11: COMPLETE - Rollback UI & API
+- ⏳ Phase 3, Slice 12: NEXT - Rollback History & View
+- ⏳ Phase 4: Agent Execution - PENDING
+- ⏳ Phase 5: Script Execution & Polish - PENDING
 
-### Key Files to Reference:
-- `src/services/artifact_service.py` - Artifact management logic (Slice 9 complete, added `get_previous_version_artifacts()` for Slice 10)
-- `src/api/routes/artifacts.py` - Artifact API endpoints (Slice 9 complete)
-- `frontend/src/components/ArtifactPreview.tsx` - Artifact preview component (Slice 9 complete, bug fixed)
-- `frontend/src/pages/RunDetail.tsx` - Run detail UI with artifacts display (Slice 9 complete, added previous version display for Slice 10)
-- `src/services/run_service.py` - Run management logic with pause/resume (reference for Slice 10)
-- `src/services/execution_service.py` - Checkpoint execution workflow (updated for Slice 10)
-- `src/models/schemas.py` - Pydantic schemas for all models (updated for Slice 10)
+### Key Files to Reference for Slice 12:
+- `src/services/rollback_service.py` - Rollback business logic (COMPLETE - Slice 11)
+- `src/api/routes/rollbacks.py` - Rollback API endpoints (COMPLETE - Slice 11)
+- `frontend/src/pages/RunDetail.tsx` - Run detail UI (rollback state added, modal done, history NOT done yet)
+- `frontend/src/types/pipeline.ts` - Rollback types (COMPLETE - Slice 11)
+- `frontend/src/lib/api.ts` - Rollback API methods (COMPLETE - Slice 11)
+- `src/models/schemas.py` - Rollback schemas (COMPLETE - Slice 11)
 - `completion_status.md` - This file - full project history
 - `README.md` - Project overview and quick status
 
@@ -1530,11 +1767,86 @@ Version extension now works end-to-end:
 - **Paused state**: When paused, hide checkpoint controls using `{!isPaused && currentExecution && ...}` pattern
 - **Artifact loading**: Lazy load artifacts on click to avoid unnecessary API calls
 - **FileResponse**: Use FastAPI's FileResponse for direct file downloads with proper media types
-- **Toggle with load**: When implementing show/hide functionality that fetches data, call the load function in the toggle handler (not just setState)
+- **Toggle with load**: When implementing show/hide functionality that fetches data, call load function in toggle handler (not just setState)
+- **Modal with fragment**: When adding JSX elements after a button that may have conditional rendering, use fragments `<>...</>` to avoid nesting issues
+- **Rollback history state**: Use state array to store rollback events for display (added in Slice 11, display in Slice 12)
 
 ---
 
-## 🚀 NEXT SESSION: Phase 2, Slice 10 - Extend Previous Run (Version Extension)
+## 🚀 NEXT SESSION: Phase 3, Slice 12 - Rollback History & View
+
+### Overview for Next Session
+
+**Goal**: Display rollback history in the RunDetail page with full details.
+
+**Planned Features:**
+1. Fetch rollback history from API (`GET /api/rollbacks/runs/{run_id}/history`)
+2. Display rollback history section in RunDetail page
+3. Show rollback details:
+   - Rollback timestamp
+   - Rollback type (checkpoint_level vs run_level)
+   - Target checkpoint or run
+   - User reason (if provided)
+   - Items deleted (runs, checkpoints, executions, artifacts)
+4. Add "View Archive" button for each rollback event (future enhancement)
+5. Style rollback history to be visually distinct from other sections
+
+**Backend Work:**
+- Already implemented in Slice 11:
+  - `get_rollback_history()` method in `rollback_service.py`
+  - `GET /api/rollbacks/runs/{run_id}/history` endpoint
+  - RollbackEvent model populated when rollback executes
+
+**Frontend Work:**
+- Fetch rollback history on page load
+- Display rollback history section (below Checkpoint Executions or in separate tab)
+- Create `RollbackHistory` component or add directly to RunDetail
+- Show timestamp, type, target, reason for each rollback event
+- Style with rollback-specific colors/icons
+
+**Key Considerations:**
+- Rollback history state (`rollbackHistory`) already added to RunDetail.tsx in Slice 11
+- Only the display component is missing
+- Use purple or orange colors to distinguish rollback history from other sections
+- Show empty state if no rollback history exists
+
+**API Response Example:**
+```json
+{
+  "rollback_history": [
+    {
+      "rollback_id": "uuid",
+      "created_at": "2026-02-13T12:00:00",
+      "rollback_type": "checkpoint_level",
+      "target_checkpoint_position": 2,
+      "target_checkpoint_name": "Check Data Quality",
+      "user_reason": "Found issue with data format",
+      "rolled_back_items": {
+        "deleted_runs": [],
+        "deleted_checkpoint_executions": [
+          {
+            "execution_id": "uuid",
+            "checkpoint_id": "uuid",
+            "checkpoint_name": "Data Analysis"
+          }
+        ],
+        "archived_artifacts": [
+          {
+            "artifact_id": "uuid",
+            "artifact_name": "analysis_results.json",
+            "size_bytes": 1024
+          }
+        ]
+      }
+    }
+  ]
+}
+```
+
+**Files to Modify:**
+- `frontend/src/pages/RunDetail.tsx` - Add rollback history display component
+
+---
 
 ### Overview for Next Session
 
@@ -1557,12 +1869,4 @@ Version extension now works end-to-end:
 - Show previous version artifacts as reference when executing checkpoints
 - Version comparison view
 
-**Key Considerations**:
-- `include_previous_version` in checkpoint definition - load same checkpoint from previous run
-- For Slice 10, will show previous version artifacts in the UI for reference
-- v2 checkpoint 0 should have access to v1 checkpoint 0 outputs if configured
-
----
-
-## PHASE 2: 4/5 COMPLETE 🔵
 

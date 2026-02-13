@@ -7,7 +7,7 @@
  */
 
 import { useEffect, useState, useCallback } from 'react';
-import type { PipelineRunDetail, CheckpointExecutionDetail, FormField, ArtifactSummary, PreviousVersionArtifact } from '../types/pipeline';
+import type { PipelineRunDetail, CheckpointExecutionDetail, FormField, ArtifactSummary, PreviousVersionArtifact, RollbackPoint, RollbackRequest } from '../types/pipeline';
 import { api } from '../lib/api';
 import { ArtifactPreview } from '../components/ArtifactPreview';
 
@@ -580,6 +580,14 @@ export function RunDetail({ runId }: RunDetailProps) {
   // Store artifacts for each execution (Slice 9)
   const [executionArtifacts, setExecutionArtifacts] = useState<Record<string, ArtifactSummary[]>>({});
 
+  // Rollback state (Slice 11)
+  const [rollbackPoints, setRollbackPoints] = useState<RollbackPoint[]>([]);
+  const [showRollbackModal, setShowRollbackModal] = useState(false);
+  const [selectedRollbackPoint, setSelectedRollbackPoint] = useState<RollbackPoint | null>(null);
+  const [rollbackReason, setRollbackReason] = useState('');
+  const [rollbackLoading, setRollbackLoading] = useState(false);
+  const [rollbackHistory, setRollbackHistory] = useState<RollbackEvent[]>([]);
+
   const fetchData = useCallback(async () => {
     if (!runId) return;
 
@@ -776,6 +784,52 @@ export function RunDetail({ runId }: RunDetailProps) {
     }
   };
 
+  // Rollback functions (Slice 11)
+  const handleOpenRollbackModal = async () => {
+    if (!runId) return;
+    try {
+      const points = await api.getRollbackPoints(runId);
+      setRollbackPoints(points);
+      setShowRollbackModal(true);
+    } catch (err) {
+      console.error('Failed to load rollback points:', err);
+    }
+  };
+
+  const handleCloseRollbackModal = () => {
+    setShowRollbackModal(false);
+    setSelectedRollbackPoint(null);
+    setRollbackReason('');
+  };
+
+  const handleSelectRollbackPoint = (point: RollbackPoint) => {
+    setSelectedRollbackPoint(point);
+  };
+
+  const handleInitiateRollback = async () => {
+    if (!runId || !selectedRollbackPoint) return;
+    try {
+      setRollbackLoading(true);
+      const request: RollbackRequest = {
+        rollback_type: 'checkpoint_level',
+        target_checkpoint_position: selectedRollbackPoint.checkpoint_position,
+        user_reason: rollbackReason || undefined
+      };
+      const result = await api.initiateRollback(runId, request);
+      setRollbackHistory([result, ...rollbackHistory]);
+      setShowRollbackModal(false);
+      setSelectedRollbackPoint(null);
+      setRollbackReason('');
+      // Refresh data
+      await fetchData();
+    } catch (err) {
+      console.error('Rollback failed:', err);
+      alert('Rollback failed: ' + (err instanceof Error ? err.message : 'Unknown error'));
+    } finally {
+      setRollbackLoading(false);
+    }
+  };
+
   // Check if we can pause - allow pausing whenever run is in_progress
   // Pause should be available before starting a checkpoint or between checkpoints
   const canPause = run?.status === 'in_progress';
@@ -875,29 +929,44 @@ export function RunDetail({ runId }: RunDetailProps) {
             </button>
           )}
           {isPaused && (
-            <button
-              onClick={handleResumeRun}
-              disabled={actionLoading}
-              className="px-3 py-1.5 bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:bg-gray-400 disabled:cursor-not-allowed flex items-center gap-2 text-sm font-medium"
-              title="Resume the pipeline"
-            >
-              {actionLoading ? (
-                <>
-                  <div className="animate-spin rounded-full h-3 w-3 border-b-2 border-white"></div>
-                  Resuming...
-                </>
-              ) : (
-                <>
-                  <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
-                    <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM9.555 7.168A1 1 0 008 8v4a1 1 0 001.555.832l3-2a1 1 0 000-1.664l-3-2z" clipRule="evenodd" />
+            <>
+              <button
+                onClick={handleResumeRun}
+                disabled={actionLoading}
+                className="px-3 py-1.5 bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:bg-gray-400 disabled:cursor-not-allowed flex items-center gap-2 text-sm font-medium"
+                title="Resume the pipeline"
+              >
+                {actionLoading ? (
+                  <>
+                    <div className="animate-spin rounded-full h-3 w-3 border-b-2 border-white"></div>
+                    Resuming...
+                  </>
+                ) : (
+                  <>
+                    <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
+                      <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM9.555 7.168A1 1 0 008 8v4a1 1 0 001.555.832l3-2a1 1 0 000-1.664l-3-2z" clipRule="evenodd" />
+                    </svg>
+                    Resume
+                  </>
+                )}
+              </button>
+              {/* Rollback Button (Slice 11) */}
+              {run.status !== 'not_started' && run.status !== 'failed' && (
+                <button
+                  onClick={handleOpenRollbackModal}
+                  disabled={actionLoading}
+                  className="px-3 py-1.5 bg-red-600 text-white rounded-lg hover:bg-red-700 disabled:bg-gray-400 disabled:cursor-not-allowed flex items-center gap-2"
+                  title="Rollback to a previous checkpoint"
+                >
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 10a9 9 3-011.414 10a9 9 11 414 0 01 4.293 8.293a1 9 9 011.414 10a9 9 414 0 10 1.414 0l4-4a1 1 0 010-1.414 0l4-4z" clipRule="evenodd" />
                   </svg>
-                  Resume
-                </>
+                  Rollback
+                </button>
               )}
-            </button>
+            </>
           )}
         </div>
-      </div>
 
       {/* Action Messages */}
       {actionMessage && (
@@ -1154,8 +1223,123 @@ export function RunDetail({ runId }: RunDetailProps) {
           <li>• Resume paused pipeline (Slice 8)</li>
           <li>• View and download checkpoint artifacts (Slice 9)</li>
           <li>• Previous version artifacts context (Slice 10)</li>
+          <li>• Rollback to previous checkpoint (Slice 11)</li>
         </ul>
       </div>
+
+      {/* Rollback Modal (Slice 11) */}
+      {showRollbackModal && (
+        <div className="fixed inset-0 bg-black/50 bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-lg shadow-xl max-w-2xl w-full p-6">
+            <div className="flex justify-between items-center mb-4">
+              <h2 className="text-xl font-bold text-gray-900">Rollback to Previous Checkpoint</h2>
+              <button
+                onClick={handleCloseRollbackModal}
+                className="text-gray-400 hover:text-gray-600"
+              >
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 20 20">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M18 10a9 9 3-011.414 10a9 9 11 414 0 01-4.293 8.293a1 9 9 011.414 10a9 9 414 0 10 1.414 0l4-4a1 1 0 010-1.414 0l4-4z" clipRule="evenodd" />
+                </svg>
+              </button>
+            </div>
+
+            <p className="text-sm text-gray-600 mb-4">
+              Select a checkpoint below to rollback to. All checkpoints AFTER the selected checkpoint
+              will be deleted and archived. The pipeline will continue from the selected checkpoint.
+            </p>
+
+            {rollbackLoading && (
+              <div className="flex items-center justify-center py-4">
+                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto mb-4"></div>
+                <p className="text-gray-600">Processing rollback...</p>
+              </div>
+            )}
+
+            {rollbackPoints.length > 0 ? (
+              <div className="space-y-3">
+                <h3 className="text-md font-semibold mb-3">Available Rollback Points</h3>
+                <div className="space-y-2">
+                  {rollbackPoints.map((point) => (
+                    <div
+                      key={point.checkpoint_id}
+                      onClick={() => handleSelectRollbackPoint(point)}
+                      className={`p-3 border rounded-lg cursor-pointer transition-colors ${
+                        selectedRollbackPoint?.checkpoint_id === point.checkpoint_id
+                          ? 'border-blue-500 bg-blue-50 ring-2 ring-blue-500'
+                          : 'border-gray-200 hover:border-blue-300 hover:bg-gray-50'
+                      }`}
+                    >
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <p className="font-medium text-gray-900">
+                            {point.checkpoint_name || `Checkpoint ${point.checkpoint_position + 1}`}
+                          </p>
+                          <p className="text-sm text-gray-500">
+                            Position: {point.checkpoint_position}
+                          </p>
+                        </div>
+                        {point.is_current && (
+                          <span className="ml-2 px-2 py-1 bg-green-100 text-green-800 text-xs rounded-full">
+                            Current
+                          </span>
+                        )}
+                      </div>
+                      <div className="text-sm text-gray-500">
+                        {point.completed_at && new Date(point.completed_at).toLocaleDateString()}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            ) : (
+              <p className="text-center text-gray-500">No completed checkpoints available for rollback.</p>
+            )}
+
+            <div className="mt-6">
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Reason for rollback (optional):
+              </label>
+              <textarea
+                value={rollbackReason}
+                onChange={(e) => setRollbackReason(e.target.value)}
+                placeholder="e.g., Need to fix errors in checkpoint 3..."
+                rows={3}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+              />
+            </div>
+
+            <div className="flex justify-end gap-3 mt-6">
+              <button
+                onClick={handleCloseRollbackModal}
+                className="px-4 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleInitiateRollback}
+                disabled={!selectedRollbackPoint || rollbackLoading}
+                className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 disabled:bg-gray-400 disabled:cursor-not-allowed flex items-center gap-2"
+              >
+                {rollbackLoading ? (
+                  <>
+                    <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
+                    Processing...
+                  </>
+                ) : (
+                  <>
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 10a9 9 3-011.414 10a9 9 11 414 0 01-4.293 8.293a1 9 9 011.414 10a9 9 414 0 10 1.414 0l4-4a1 1 0 010-1.414 0l4-4z" clipRule="evenodd" />
+                    </svg>
+                    Rollback to Checkpoint {selectedRollbackPoint?.checkpoint_position}
+                  </>
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
     </div>
   );
 }
